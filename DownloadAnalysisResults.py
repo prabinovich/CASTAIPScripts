@@ -85,7 +85,7 @@ def getSnapshotResults(_apiUrl, _auth, _appName, _snapshotResultsUri, _aipResult
                 # Get health factors that rule is contributing to
                 _ruleHealthFactors = getRuleInfo(_apiUrl, _auth, _ruleName, _ruleHref, _aipResultsFile)
                 
-                # Header: 'app_name,snapshot,rule,critical_flag,total_checks,failed_checks,successful_checks,grade,health_factors'
+                # Header: 'app_name,snapshot,rule,critical_flag,grade,total_checks,failed_checks,successful_checks,health_factors'
                 _aipResultsFile.write('"{}","{}","{}","{}",{},{},{},{},"{}"\n'.format(_appName, _snapshotName, _ruleName, 
                     _ruleCriticalFlag, _ruleGrade, _ruleTotalChecks, _ruleFailedChecks, _ruleSuccessfulChecks, _ruleHealthFactors))
 
@@ -153,7 +153,7 @@ if __name__ == "__main__":
         # Create file where results of query will be stored
         _aipresultsfile = open(_args.filepath, "w")
         # Write file header
-        _aipresultsfile.write('app_name,snapshot,rule,critical_flag,total_checks,failed_checks,successful_checks,grade,health_factors\n') 
+        _aipresultsfile.write('app_name,snapshot,rule,critical_flag,grade,total_checks,failed_checks,successful_checks,health_factors\n') 
     
         # Get list of all applications
         _headers = {'Accept':'application/json'}
