@@ -13,7 +13,7 @@ def getAppResults(_apiUrl, _auth, _appName, _appResultsUri, _aipResultsFile):
     
     try:
         try:
-            print('Making a call to get rule results for {} app: {}/{}'.format(_appName, _apiUrl, _restUri))
+            print('Making a call to get rule results for {} app.'.format(_appName))
             _jsonResult = requests.get(_apiUrl+'/'+_restUri, headers=_headers, auth=_auth, verify=False, timeout=30).json()
             #print('1st RestAPI call succeeded.')
         except requests.exceptions.RequestException as e:
@@ -33,7 +33,7 @@ def getAppResults(_apiUrl, _auth, _appName, _appResultsUri, _aipResultsFile):
         else:
             # Loop through each snapshot and get rule results
             for item in _jsonResult:
-                print('Getting info for application "{}" snapshot {}'.format(item['application']['name'], item['version']))
+                print('Getting info for application "{}" snapshot "{}"'.format(item['application']['name'], item['version']))
                 getSnapshotResults(_args.connection, _auth, item['application']['name'], item['applicationSnapshot']['href'], _aipresultsfile)
 
     except Exception as e:
@@ -46,11 +46,11 @@ def getAppResults(_apiUrl, _auth, _appName, _appResultsUri, _aipResultsFile):
 def getSnapshotResults(_apiUrl, _auth, _appName, _snapshotResultsUri, _aipResultsFile):
     _headers = {'Accept':'application/json'}
     # Get quality rules results for a given snapshot
-    _restUri = '{}/results/?quality-indicators=(quality-rules)'.format(_snapshotResultsUri)
+    _restUri = '{}/results/?quality-indicators=(quality-rules)&select=violationRatio'.format(_snapshotResultsUri)
     
     try:
         try:
-            print('Making a call to get rule results for {} app: {}/{}'.format(_appName, _apiUrl, _restUri))
+            print('Attempting to make RestAPI call to get snapshot results...')
             _jsonResult = requests.get(_apiUrl+'/'+_restUri, headers=_headers, auth=_auth, verify=False, timeout=30).json()
             #print('1st RestAPI call succeeded.')
         except requests.exceptions.RequestException as e:
@@ -78,12 +78,16 @@ def getSnapshotResults(_apiUrl, _auth, _appName, _snapshotResultsUri, _aipResult
                 _ruleID = item['reference']['key'] if ('reference' in item) else 'n/a'
                 _ruleCriticalFlag = item['reference']['critical'] if ('reference' in item) else 'n/a'
                 _ruleGrade = item['result']['grade'] if ('result' in item) else 'n/a'
+                _ruleTotalChecks = item['result']['violationRatio']['totalChecks'] if ('result' in item) else 'n/a'
+                _ruleFailedChecks = item['result']['violationRatio']['failedChecks'] if ('result' in item) else 'n/a'
+                _ruleSuccessfulChecks = item['result']['violationRatio']['successfulChecks'] if ('result' in item) else 'n/a'
                 
                 # Get health factors that rule is contributing to
                 _ruleHealthFactors = getRuleInfo(_apiUrl, _auth, _ruleName, _ruleHref, _aipResultsFile)
                 
-                # Header: 'app_name,snapshot,rule,critical_flag,grade,health_factors'
-                _aipResultsFile.write('"{}","{}","{}","{}",{},"{}"\n'.format(_appName, _snapshotName, _ruleName, _ruleCriticalFlag, _ruleGrade, _ruleHealthFactors))
+                # Header: 'app_name,snapshot,rule,critical_flag,total_checks,failed_checks,successful_checks,grade,health_factors'
+                _aipResultsFile.write('"{}","{}","{}","{}",{},{},{},{},"{}"\n'.format(_appName, _snapshotName, _ruleName, 
+                    _ruleCriticalFlag, _ruleGrade, _ruleTotalChecks, _ruleFailedChecks, _ruleSuccessfulChecks, _ruleHealthFactors))
 
     except Exception as e:
         print('***********************************************')
@@ -147,14 +151,15 @@ if __name__ == "__main__":
 
     try:
         # Create file where results of query will be stored
-        _aipresultsfile = open(_args.filepath, "w") # Create file
-        _aipresultsfile.write('app_name,snapshot,rule,critical_flag,grade,health_factors\n') # Write file header
+        _aipresultsfile = open(_args.filepath, "w")
+        # Write file header
+        _aipresultsfile.write('app_name,snapshot,rule,critical_flag,total_checks,failed_checks,successful_checks,grade,health_factors\n') 
     
         # Get list of all applications
         _headers = {'Accept':'application/json'}
         _resturi = 'AAD/results?applications=($all)'
     
-        print('Making a call to get list of apps: {}/{}'.format(_args.connection, _resturi))
+        print('Attempting to get a list of applications...')
         _jsonResult = requests.get(_args.connection+'/'+_resturi, headers=_headers, auth=_auth, verify=False, timeout=10).json()
         print('Call succeeded! Found {} applications.'.format(len(_jsonResult)))
 
@@ -162,9 +167,7 @@ if __name__ == "__main__":
         for item in _jsonResult:
             print('Getting snapshots info for application "{}"'.format(item['application']['name']))
             getAppResults(_args.connection, _auth, item['application']['name'], item['application']['href'], _aipresultsfile)
-        
-        #getAppBOM(_args.connection, _auth, _args.orgid, 1246, 'ACH', _aipresultsfile) # Debugging statement 
-         
+                 
         # Close file
         _aipresultsfile.close()
         print ('CAST AIP results information stored in file: {}'.format(_args.filepath))
