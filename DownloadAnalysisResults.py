@@ -142,7 +142,6 @@ if __name__ == "__main__":
     parser.add_argument('-c', '--connection', action='store', dest='connection', required=True, help='Specifies URL to the CAST AIP RestAPI service')
     parser.add_argument('-u', '--username', action='store', dest='username', required=True, help='Username to connect to RestAPI')
     parser.add_argument('-p', '--password', action='store', dest='password', required=True, help='Password to connect to RestAPI')
-    #parser.add_argument('-o', '--orgid', action='store', dest='orgid', required=True, help='ID of the organization/company in Highlight')
     parser.add_argument('-f', '--filepath', action='store', dest='filepath', required=True, help='Path and name of CSV file where script results will be stored')
     parser.add_argument('-v','--version', action='version', version='%(prog)s 1.0')
     
@@ -163,7 +162,7 @@ if __name__ == "__main__":
         _jsonResult = requests.get(_args.connection+'/'+_resturi, headers=_headers, auth=_auth, verify=False, timeout=10).json()
         print('Call succeeded! Found {} applications.'.format(len(_jsonResult)))
 
-        # Loop through each application to get and store the BOM
+        # Loop through each application to get and store the analysis results
         for item in _jsonResult:
             print('Getting snapshots info for application "{}"'.format(item['application']['name']))
             getAppResults(_args.connection, _auth, item['application']['name'], item['application']['href'], _aipresultsfile)
