@@ -11,7 +11,7 @@ requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 # Declare and initialize map for keeping Health Factors contributing to each rule 
 _gRuleHFDict = {}
 
-def getAppResults(_apiUrl, _auth, _appName, _appResultsUri, _aipResultsFile):
+def getAppSnapshots(_apiUrl, _auth, _appName, _appResultsUri, _aipResultsFile):
     _headers = {'Accept':'application/json'}
     # Get the list of all snapshots
     _restUri = '{}/results/?snapshots=($all)'.format(_appResultsUri)
@@ -94,7 +94,7 @@ def getSnapshotResults(_apiUrl, _auth, _appName, _snapshotResultsUri, _aipResult
                     _ruleSuccessfulChecks = 'n/a'
                 
                 # Get health factors that rule is contributing to
-                _ruleHealthFactors = getRuleInfo(_apiUrl, _auth, _ruleID, _ruleName, _ruleHref, _aipResultsFile)
+                _ruleHealthFactors = getRuleHFs(_apiUrl, _auth, _ruleID, _ruleName, _ruleHref, _aipResultsFile)
                 
                 # Header: 'app_name,snapshot,rule,critical_flag,grade,total_checks,failed_checks,successful_checks,health_factors'
                 _aipResultsFile.write('"{}","{}","{}","{}",{},{},{},{},"{}"\n'.format(_appName, _snapshotName, _ruleName, 
@@ -107,7 +107,7 @@ def getSnapshotResults(_apiUrl, _auth, _appName, _snapshotResultsUri, _aipResult
     
     return (1)
 
-def getRuleInfo(_apiUrl, _auth, _ruleID, _ruleName, _ruleInfoUri, _aipResultsFile):
+def getRuleHFs(_apiUrl, _auth, _ruleID, _ruleName, _ruleInfoUri, _aipResultsFile):
     _headers = {'Accept':'application/json'}
     # Get the list of all snapshots
     _restUri = '{}'.format(_ruleInfoUri)
@@ -184,7 +184,7 @@ if __name__ == "__main__":
         # Loop through each application to get and store the analysis results
         for item in _jsonResult:
             print('Getting snapshots info for application "{}"'.format(item['application']['name']))
-            getAppResults(_args.connection, _auth, item['application']['name'], item['application']['href'], _aipresultsfile)
+            getAppSnapshots(_args.connection, _auth, item['application']['name'], item['application']['href'], _aipresultsfile)
                  
         # Close file
         _aipresultsfile.close()
