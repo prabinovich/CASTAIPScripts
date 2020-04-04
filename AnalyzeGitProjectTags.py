@@ -10,9 +10,9 @@ import tempfile
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
-# Declare and initialize map for application snapshot info
-_gAppSnapshotsInfo = {}
-_gApiUrl = ''
+# Declare global variables
+_gAppSnapshotsInfo = {} # application snapshot info
+_gApiUrl = '' # console API URL
 
 # Will retrieve the list of snapshots for specified application
 # Will return True or False depending if mentioned application exists on AIP Console server
@@ -52,7 +52,8 @@ def getAppSnapshots(_consoleSession, _appName):
                 # Check if the name of the app on list matches one of interest
                 if _app['name'] == _appName:
                     _appGuid = _app['guid']
-                    print('Bingo! Target application found. Saving snapshot info.')
+                    print ('Detected application "{}"... Bingo!'.format(_app['name']))
+                    print ('This is our target application. Saving snapshot info.')
                     # If this is our app, save info about its snapshots
                     for _snapshot in _app['versions']:
                         print ('Saving information for snapshot "{}"'.format(_snapshot['name']))
@@ -76,21 +77,22 @@ def runAnalysis(_consoleSession, _appGuid, _versionName, _releaseDate, _sourceZi
         'X-XSRF-TOKEN': _consoleSession.cookies['XSRF-TOKEN']
     }
     _data = """{
-        'jobParameters': {
-            'appGuid': '""" + _appGuid + """',
-            'versionName': '""" + _versionName + """',
-            'releaseDate': '""" + _releaseDate + """',
-            'sourceArchive': '""" + _sourceZip + """'
+        "jobParameters": {
+            "appGuid": \"""" + _appGuid + """\",
+            "versionName": \"""" + _versionName + """\",
+            "releaseDate": \"""" + _releaseDate + """T00:00:00.000Z\",
+            "sourceArchive": \"""" + _sourceZip + """\"
           },
-        'jobType': 'ADD_VERSION'
+        "jobType": "ADD_VERSION"
     }"""
 
     _jobGuid = ''
     try:
         _result = _consoleSession.post(_gApiUrl+'/'+_restUri, headers=_headers, data=_data, verify=False, timeout=30)
         if _result.status_code == 201:
-            _jobGuid = _results.json()['jobGuid']
+            _jobGuid = _result.json()['jobGuid']
             print ('Scan request succeeded. Job ID: {}'.format(_jobGuid))
+            pollAndWaitForJobFinished(_consoleSession, _jobGuid)
         else:
             print ('1st request for code scan failed with error code {}'.format(_result.status_code))
             print ('Detailed response:')
@@ -100,8 +102,9 @@ def runAnalysis(_consoleSession, _appGuid, _versionName, _releaseDate, _sourceZi
             print('1st attempt to code scan failed. Trying again...')
             _result = _consoleSession.post(_gApiUrl+'/'+_restUri, headers=_headers, data=_data, verify=False, timeout=30)
             if _result.status_code == 201:
-                _jobGuid = _results.json()['jobGuid']
+                _jobGuid = _result.json()['jobGuid']
                 print ('Scan request succeeded. Job ID: {}'.format(_jobGuid))
+                pollAndWaitForJobFinished(_consoleSession, _jobGuid)
             else:
                 print ('2nd request for code scan failed with error code {}'.format(_result.status_code))
                 print ('Detailed response:')
@@ -112,7 +115,54 @@ def runAnalysis(_consoleSession, _appGuid, _versionName, _releaseDate, _sourceZi
             print('Aborting script...')
             sys.exit(0)
     
-    return (_bSuccess)
+    return (_jobGuid)
+
+# Keep checking on status of the job and wait until it completes
+# Return true/false job completion status
+def pollAndWaitForJobFinished(_consoleSession, _jobGuid):
+    # Define URI to get list of all applications 
+    _restUri = 'jobs'
+    
+    _headers = {
+        'Accept':'application/json',
+        'X-XSRF-TOKEN': _consoleSession.cookies['XSRF-TOKEN']
+    }
+
+    _bJobSucceeded = False
+    _jobState = ''
+    try:
+        _jobState = 'starting'
+        while _jobState == 'starting' or _jobState == 'started':
+            _result = _consoleSession.get(_gApiUrl+'/'+_restUri+'/'+_jobGuid, headers=_headers, verify=False, timeout=30)
+            if _result.status_code == 200:
+                _jobState = _result.json()['state']
+                # if job status is not completed sleep for 5 seconds
+                if _jobState == 'starting' or _jobState == 'started':
+                    print ('Job status: {}. Sleeping for 5 seconds'.format(_jobState))
+                    time.sleep(5)
+                else:
+                    _jobState = _result.json()['state']
+                    if _jobState == 'completed':
+                        print ('Job succeeded!')
+                        _bJobSucceeded = True
+                    else:
+                        print ('Job failed with status {}'.format(_jobState))
+                        print ('Error details:')
+                        print (_result.json())
+                        _bJobSucceeded = False
+            else:
+                print ('Error {} getting job status'.format(_result.status_code))
+                print ('Detailed response:')
+                print (_result.json())
+                _bJobSucceeded = False
+                _jobState = 'completed'
+    except requests.exceptions.RequestException as e:
+        print('Connection to Console API failed')
+        print('Error: {}'.format(e))
+        print('Aborting script...')
+        sys.exit(0)
+    
+    return (_jobGuid)
 
 # Analyze an app
 def registerNewApp(_consoleSession, _appName):
@@ -137,6 +187,9 @@ def registerNewApp(_consoleSession, _appName):
         if _result.status_code == 201:
             print('Application registration request succeeded.')
             _appGuid = _result.json()['appGuid']
+            _jobGuid = _result.json()['jobGuid']
+            # poll and wait for the job to be completed
+            pollAndWaitForJobFinished(_consoleSession, _jobGuid)    
         else:
             print ('Failed to request code analysis with error code {}'.format(_result.status_code))
             print ('Detailed response:')
@@ -148,6 +201,8 @@ def registerNewApp(_consoleSession, _appName):
             if _result.status_code == 201:
                 print('2nd request to register application succeeded.')
                 _appGuid = _result.json()['appGuid']
+                _jobGuid = _result.json()['jobGuid']
+                pollAndWaitForJobFinished(_consoleSession, _jobGuid)
             else:
                 print ('Failed to request code analysis with error code {}'.format(_result.status_code))
                 print ('Detailed response:')
@@ -227,30 +282,35 @@ if __name__ == "__main__":
                 print ('Failed to register application with AIP Console. Exiting...')
                 sys.exit(0)
         
-        if False:
-            # Checkout code to a temp directory and scan each tag available
-            with tempfile.TemporaryDirectory() as tmpdirname:
-                print('Created temporary directory: ', tmpdirname)
-                
-                # Clone target repository locally
-                os.system('git clone ' + _args.repo + ' ' + tmpdirname)
-    
-                # Get list of available tags
-                #ret = subprocess.check_output('git --git-dir=' + tmpdirname + '/.git tag')
-                ret = subprocess.check_output('git --git-dir=' + tmpdirname + '/.git tag -l --format="%(creatordate:short)|%(refname:short)"')
-                # Covert byte sequence to an array
-                tags = ret.decode('ascii').splitlines()
-                
-                # Loop through tags and get code for each tag
-                for tag in tags:
-                   print ('Processing tag: ' + tag)
-                   # Create an array of date and tag
-                   tagInfo = tag.split('|')
-                   # Checkout currently selected tag to temporary directory
-                   os.system('git --git-dir=' + tmpdirname + '/.git checkout tags/' + tagInfo[1] + ' -f')
-                   if tagInfo[1] == 'mybatis-spring-2.0.3':
-                       print ('Initializing analysis of an application')
-                       runAnalysis(_consoleSession, _appGuid, tagInfo[1], tagInfo[0],  "C:/Temp/GatorMail.zip")
+        # Checkout code to a temp directory and scan each tag available
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            print('Created temporary directory: ', tmpdirname)
+            
+            # Clone target repository locally
+            os.system('git clone ' + _args.repo + ' ' + tmpdirname)
+
+            # Get list of available tags
+            #ret = subprocess.check_output('git --git-dir=' + tmpdirname + '/.git tag')
+            ret = subprocess.check_output('git --git-dir=' + tmpdirname + '/.git tag -l --format="%(creatordate:short)|%(refname:short)"')
+            # Covert byte sequence to an array
+            tags = ret.decode('ascii').splitlines()
+            
+            # Loop through tags and get code for each tag
+            for tag in tags:
+                print ('Processing tag: ' + tag)
+                # Create an array of date and tag
+                tagInfo = tag.split('|')
+                # Check if the tag has not yet been analyzed
+                if True: #tagInfo[1] == 'mybatis-spring-2.0.2':
+                    if tagInfo[1] not in _gAppSnapshotsInfo:
+                        print ('Setting code version to the target tag: {}'.format(tagInfo[1]))
+                        os.system('git --git-dir=' + tmpdirname + '/.git checkout tags/' + tagInfo[1] + ' -f')
+                        print ('Initializing analysis for app: "{}" tag: "{}"'.format(_args.app, tagInfo[1]))
+                        
+                        os.system('copy C:/Temp/GatorMail_Master.zip C:/Temp/GatorMail.zip')
+                        runAnalysis(_consoleSession, _appGuid, tagInfo[1], tagInfo[0],  "C:/Temp/GatorMail.zip")
+                    else:
+                        print ('Tag {} already analyzed... skipping'.format(tagInfo[1]))
 
     except Exception as e:
             print('Error: {}'.format(str(e)))
