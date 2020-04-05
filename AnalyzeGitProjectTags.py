@@ -298,8 +298,6 @@ if __name__ == "__main__":
             
             # Loop through tags and get code for each tag
             for tag in tags:
-                # Increment tag counter
-                tagCounter += 1
 
                 # Create an array of date and tag
                 tagInfo = tag.split('|')
