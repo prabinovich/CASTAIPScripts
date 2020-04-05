@@ -82,7 +82,7 @@ def runAnalysis(_consoleSession, _appGuid, _versionName, _releaseDate, _sourceZi
         "jobParameters": {
             "appGuid": \"""" + _appGuid + """\",
             "versionName": \"""" + _versionName + """\",
-            "releaseDate": \"""" + _releaseDate + """T00:00:00.000Z\",
+            "releaseDate": \"""" + _releaseDate + """\",
             "sourceArchive": \"""" + _sourceZip + """\"
           },
         "jobType": "ADD_VERSION"
@@ -285,8 +285,9 @@ if __name__ == "__main__":
                 sys.exit(0)
         
         # Checkout code to a temp directory and scan each tag available
-        with tempfile.TemporaryDirectory().name as _tmpdirname:
-            print('Created temporary directory: ', _tmpdirname)
+        with tempfile.TemporaryDirectory() as _tmpdirname:
+
+            print('Created temporary directory: ' + _tmpdirname)
 
             # Clone target repository locally
             os.system('git clone ' + _args.repo + ' ' + _tmpdirname)
@@ -296,11 +297,16 @@ if __name__ == "__main__":
             # Covert byte sequence to an array
             tags = ret.decode('ascii').splitlines()
             
+            tagCounter = 0
             # Loop through tags and get code for each tag
             for tag in tags:
+                # Increment tag counter
+                tagCounter += 1
                 print ('Processing tag: ' + tag)
                 # Create an array of date and tag
                 tagInfo = tag.split('|')
+                _tagDateTime = str.format("{}T00:00:00.{:02d}Z", tagInfo[0], tagCounter)
+                
                 # Check if the tag has not yet been analyzed
                 if True: #tagInfo[1] == 'mybatis-spring-2.0.2':
                     if tagInfo[1] not in _gAppSnapshotsInfo:
@@ -314,7 +320,7 @@ if __name__ == "__main__":
                             print ('Creating temporary ZIP file: {}.zip'.format(_tmpFilePath))
                             shutil.make_archive(_tmpFilePath, 'zip', _tmpdirname)
                             print ('Initializing analysis for app: "{}" tag: "{}"'.format(_args.app, tagInfo[1]))
-                            runAnalysis(_consoleSession, _appGuid, tagInfo[1], tagInfo[0],  (_tmpFilePath+'.zip').replace('\\','\\\\'))
+                            runAnalysis(_consoleSession, _appGuid, tagInfo[1], _tagDateTime,  (_tmpFilePath+'.zip').replace('\\','\\\\'))
                             os.system('del /f /q {}.zip'.format(_tmpFilePath))
                     else:
                         print ('Tag {} already analyzed... skipping'.format(tagInfo[1]))
