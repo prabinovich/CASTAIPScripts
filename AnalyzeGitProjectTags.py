@@ -82,7 +82,7 @@ def runAnalysis(_consoleSession, _appGuid, _versionName, _releaseDate, _sourceZi
         "jobParameters": {
             "appGuid": \"""" + _appGuid + """\",
             "versionName": \"""" + _versionName + """\",
-            "releaseDate": \"""" + _releaseDate + """\",
+            "releaseDate": \"""" + str.format("{}T00:00:00.000Z", _releaseDate) + """\",
             "sourceArchive": \"""" + _sourceZip + """\"
           },
         "jobType": "ADD_VERSION"
@@ -288,30 +288,29 @@ if __name__ == "__main__":
         with tempfile.TemporaryDirectory() as _tmpdirname:
 
             print('Created temporary directory: ' + _tmpdirname)
-
             # Clone target repository locally
             os.system('git clone ' + _args.repo + ' ' + _tmpdirname)
 
             # Get list of available tags
-            ret = subprocess.check_output('git --git-dir=' + _tmpdirname + '/.git tag -l --format="%(creatordate:short)|%(refname:short)"')
+            ret = subprocess.check_output('cd ' + _tmpdirname + ' && git tag -l --format="%(creatordate:short)|%(refname:short)"', shell=True)
             # Covert byte sequence to an array
             tags = ret.decode('ascii').splitlines()
             
-            tagCounter = 0
             # Loop through tags and get code for each tag
             for tag in tags:
                 # Increment tag counter
                 tagCounter += 1
-                print ('Processing tag: ' + tag)
+
                 # Create an array of date and tag
                 tagInfo = tag.split('|')
-                _tagDateTime = str.format("{}T00:00:00.{:02d}Z", tagInfo[0], tagCounter)
+                
+                print ('Processing tag: {} created on {}'.format(tagInfo[1], tagInfo[0]))
                 
                 # Check if the tag has not yet been analyzed
                 if True: #tagInfo[1] == 'mybatis-spring-2.0.2':
                     if tagInfo[1] not in _gAppSnapshotsInfo:
                         print ('Setting code version to the target tag: {}'.format(tagInfo[1]))
-                        os.system('git --git-dir=' + _tmpdirname + '/.git checkout tags/' + tagInfo[1] + ' -f')
+                        os.system('cd ' + _tmpdirname + ' && git checkout tags/' + tagInfo[1] + ' -f')
                         
                         with tempfile.TemporaryFile(prefix='Cast_Src_') as _tmpFile:
                             #tempfile.TemporaryFile(mode, buffering, encoding, newline, suffix, prefix, dir)
@@ -320,7 +319,8 @@ if __name__ == "__main__":
                             print ('Creating temporary ZIP file: {}.zip'.format(_tmpFilePath))
                             shutil.make_archive(_tmpFilePath, 'zip', _tmpdirname)
                             print ('Initializing analysis for app: "{}" tag: "{}"'.format(_args.app, tagInfo[1]))
-                            runAnalysis(_consoleSession, _appGuid, tagInfo[1], _tagDateTime,  (_tmpFilePath+'.zip').replace('\\','\\\\'))
+                            runAnalysis(_consoleSession, _appGuid, tagInfo[1], tagInfo[0],  (_tmpFilePath+'.zip').replace('\\','\\\\'))
+                            # cleanup if needed
                             os.system('del /f /q {}.zip'.format(_tmpFilePath))
                     else:
                         print ('Tag {} already analyzed... skipping'.format(tagInfo[1]))
