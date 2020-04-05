@@ -7,7 +7,9 @@ import time
 import json
 import subprocess
 import tempfile
+import shutil
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
+from sys import prefix
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 # Declare global variables
@@ -283,15 +285,14 @@ if __name__ == "__main__":
                 sys.exit(0)
         
         # Checkout code to a temp directory and scan each tag available
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            print('Created temporary directory: ', tmpdirname)
+        with tempfile.TemporaryDirectory() as _tmpdirname:
+            print('Created temporary directory: ', _tmpdirname)
             
             # Clone target repository locally
-            os.system('git clone ' + _args.repo + ' ' + tmpdirname)
+            os.system('git clone ' + _args.repo + ' ' + _tmpdirname)
 
             # Get list of available tags
-            #ret = subprocess.check_output('git --git-dir=' + tmpdirname + '/.git tag')
-            ret = subprocess.check_output('git --git-dir=' + tmpdirname + '/.git tag -l --format="%(creatordate:short)|%(refname:short)"')
+            ret = subprocess.check_output('git --git-dir=' + _tmpdirname + '/.git tag -l --format="%(creatordate:short)|%(refname:short)"')
             # Covert byte sequence to an array
             tags = ret.decode('ascii').splitlines()
             
@@ -304,11 +305,16 @@ if __name__ == "__main__":
                 if True: #tagInfo[1] == 'mybatis-spring-2.0.2':
                     if tagInfo[1] not in _gAppSnapshotsInfo:
                         print ('Setting code version to the target tag: {}'.format(tagInfo[1]))
-                        os.system('git --git-dir=' + tmpdirname + '/.git checkout tags/' + tagInfo[1] + ' -f')
-                        print ('Initializing analysis for app: "{}" tag: "{}"'.format(_args.app, tagInfo[1]))
+                        os.system('git --git-dir=' + _tmpdirname + '/.git checkout tags/' + tagInfo[1] + ' -f')
                         
-                        os.system('copy C:/Temp/GatorMail_Master.zip C:/Temp/GatorMail.zip')
-                        runAnalysis(_consoleSession, _appGuid, tagInfo[1], tagInfo[0],  "C:/Temp/GatorMail.zip")
+                        with tempfile.TemporaryFile(prefix='Cast_Src_') as _tmpFile:
+                            #tempfile.TemporaryFile(mode, buffering, encoding, newline, suffix, prefix, dir)
+                            # Create temporary zip file
+                            _tmpFilePath = os.path.realpath(_tmpFile.name)
+                            print ('Creating temporary ZIP file: {}.zip'.format(_tmpFilePath))
+                            shutil.make_archive(_tmpFilePath, 'zip', _tmpdirname)
+                            print ('Initializing analysis for app: "{}" tag: "{}"'.format(_args.app, tagInfo[1]))
+                            runAnalysis(_consoleSession, _appGuid, tagInfo[1], tagInfo[0],  (_tmpFilePath+'.zip').replace('\\','\\\\'))
                     else:
                         print ('Tag {} already analyzed... skipping'.format(tagInfo[1]))
 
