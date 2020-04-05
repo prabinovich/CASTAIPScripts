@@ -285,9 +285,9 @@ if __name__ == "__main__":
                 sys.exit(0)
         
         # Checkout code to a temp directory and scan each tag available
-        with tempfile.TemporaryDirectory() as _tmpdirname:
+        with tempfile.TemporaryDirectory().name as _tmpdirname:
             print('Created temporary directory: ', _tmpdirname)
-            
+
             # Clone target repository locally
             os.system('git clone ' + _args.repo + ' ' + _tmpdirname)
 
@@ -315,6 +315,7 @@ if __name__ == "__main__":
                             shutil.make_archive(_tmpFilePath, 'zip', _tmpdirname)
                             print ('Initializing analysis for app: "{}" tag: "{}"'.format(_args.app, tagInfo[1]))
                             runAnalysis(_consoleSession, _appGuid, tagInfo[1], tagInfo[0],  (_tmpFilePath+'.zip').replace('\\','\\\\'))
+                            os.system('del /f /q {}.zip'.format(_tmpFilePath))
                     else:
                         print ('Tag {} already analyzed... skipping'.format(tagInfo[1]))
 
