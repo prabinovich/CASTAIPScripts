@@ -259,7 +259,7 @@ def initConsoleSession(_apiKey):
 
 if __name__ == "__main__":
     
-    parser = argparse.ArgumentParser(description="Analyzes all tags for a given Git repo using AIP Console.")
+    parser = argparse.ArgumentParser(description="Will analyzes all tags for a given Git repo using AIP Console.")
     parser.add_argument('-a', '--app', action='store', dest='app', required=True, help='Name of the application to scan')
     parser.add_argument('-r', '--repo', action='store', dest='repo', required=True, help='Git repo URL location for downloading source')
     parser.add_argument('-c', '--api', action='store', dest='api', required=True, help='URL for AIP Console API')
