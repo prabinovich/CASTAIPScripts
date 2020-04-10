@@ -4,6 +4,7 @@ import sys
 import argparse
 import requests
 import time
+import re
 import json
 import subprocess
 import tempfile
@@ -262,6 +263,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Will analyzes all tags for a given Git repo using AIP Console.")
     parser.add_argument('-a', '--app', action='store', dest='app', required=True, help='Name of the application to scan')
     parser.add_argument('-r', '--repo', action='store', dest='repo', required=True, help='Git repo URL location for downloading source')
+    parser.add_argument('-t', '--regx', action='store', dest='regx', required=True, help='Regular expression representing which Git repo tags to analyze')
     parser.add_argument('-c', '--api', action='store', dest='api', required=True, help='URL for AIP Console API')
     parser.add_argument('-k', '--key', action='store', dest='key', required=True, help='API key for accessing Console')
     parser.add_argument('-v','--version', action='version', version='%(prog)s 1.0')
@@ -304,8 +306,9 @@ if __name__ == "__main__":
                 
                 print ('Processing tag: {} created on {}'.format(tagInfo[1], tagInfo[0]))
                 
-                # Check if the tag has not yet been analyzed
-                if True: #tagInfo[1] == 'mybatis-spring-2.0.2':
+                # CHeck if the tag matches patters requested for analysis
+                if re.match(_args.regx, tagInfo[1], re.I):
+                    # Check if the tag has not yet been analyzed
                     if tagInfo[1] not in _gAppSnapshotsInfo:
                         print ('Setting code version to the target tag: {}'.format(tagInfo[1]))
                         os.system('cd ' + _tmpdirname + ' && git checkout tags/' + tagInfo[1] + ' -f')
@@ -322,6 +325,8 @@ if __name__ == "__main__":
                             os.system('del /f /q {}.zip'.format(_tmpFilePath))
                     else:
                         print ('Tag {} already analyzed... skipping'.format(tagInfo[1]))
+                else:
+                    print ('Tag {} did not match targeted pattern... skipping'.format(tagInfo[1]))
 
     except Exception as e:
             print('Error: {}'.format(str(e)))
