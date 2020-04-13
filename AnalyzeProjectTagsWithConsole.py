@@ -311,7 +311,7 @@ if __name__ == "__main__":
                 sys.exit(0)
         
         # Checkout code to a temp directory and scan each tag available
-        with tempfile.TemporaryDirectory(prefix='CAST_Src') as _tmpdirname:
+        with tempfile.TemporaryDirectory(prefix='CAST_Src_') as _tmpdirname:
 
             print('Created temporary directory: ' + _tmpdirname)
             # Clone target repository locally
