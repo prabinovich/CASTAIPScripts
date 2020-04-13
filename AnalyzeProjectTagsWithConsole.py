@@ -219,6 +219,13 @@ def registerNewApp(_consoleSession, _appName):
 
     return (_appGuid)
 
+# Remove any special characters from tag name
+def replaceSpecialChars(_inStr):
+    _outStr = re.sub(r'\\', '_', _inStr)
+    _outStr = re.sub(r'\/', '_', _inStr)
+    
+    return (_outStr)
+
 # Initialize session to console API
 def initConsoleSession(_apiKey):
     # Define URI to get list of all applications 
@@ -304,7 +311,7 @@ if __name__ == "__main__":
                 sys.exit(0)
         
         # Checkout code to a temp directory and scan each tag available
-        with tempfile.TemporaryDirectory() as _tmpdirname:
+        with tempfile.TemporaryDirectory(prefix='CAST_Src') as _tmpdirname:
 
             print('Created temporary directory: ' + _tmpdirname)
             # Clone target repository locally
@@ -326,18 +333,18 @@ if __name__ == "__main__":
                 # CHeck if the tag matches patters requested for analysis
                 if re.match(_args.regx, tagInfo[1], re.I):
                     # Check if the tag has not yet been analyzed
-                    if tagInfo[1] not in _gAppSnapshotsInfo:
+                    if replaceSpecialChars(tagInfo[1]) not in _gAppSnapshotsInfo:
                         print ('Setting code version to the target tag: {}'.format(tagInfo[1]))
                         os.system('cd /D ' + _tmpdirname + ' && git checkout tags/' + tagInfo[1] + ' -f')
                         
-                        with tempfile.TemporaryFile(prefix='Cast_Src_') as _tmpFile:
+                        with tempfile.TemporaryFile(prefix='CAST_Zip_') as _tmpFile:
                             #tempfile.TemporaryFile(mode, buffering, encoding, newline, suffix, prefix, dir)
                             # Create temporary zip file
                             _tmpFilePath = os.path.realpath(_tmpFile.name)
                             print ('Creating temporary ZIP file: {}.zip'.format(_tmpFilePath))
                             shutil.make_archive(_tmpFilePath, 'zip', _tmpdirname)
                             print ('Initializing analysis for app: "{}" tag: "{}"'.format(_args.app, tagInfo[1]))
-                            runAnalysis(_consoleSession, _appGuid, tagInfo[1], tagInfo[0],  (_tmpFilePath+'.zip').replace('\\','\\\\'))
+                            runAnalysis(_consoleSession, _appGuid, replaceSpecialChars(tagInfo[1]), tagInfo[0],  (_tmpFilePath+'.zip').replace('\\','\\\\'))
                             # cleanup if needed
                             os.system('del /f /q {}.zip'.format(_tmpFilePath))
                     else:
