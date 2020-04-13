@@ -3,6 +3,7 @@ import os
 import sys
 import argparse
 import requests
+import urllib.parse
 import time
 import re
 import json
@@ -261,15 +262,31 @@ def initConsoleSession(_apiKey):
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Will analyzes all tags for a given Git repo using AIP Console.")
-    parser.add_argument('-a', '--app', action='store', dest='app', required=True, help='Name of the application to scan')
-    parser.add_argument('-r', '--repo', action='store', dest='repo', required=True, help='Git repo URL location for downloading source')
-    parser.add_argument('-t', '--regx', action='store', dest='regx', required=True, help='Regular expression representing which Git repo tags to analyze')
-    parser.add_argument('-c', '--api', action='store', dest='api', required=True, help='URL for AIP Console API')
+    parser.add_argument('-a', '--app', action='store', dest='app', required=True, help='Name of the application to scan (ex: foo)')
+    parser.add_argument('-r', '--repo', action='store', dest='repo', required=True, help='Git repo location for downloading source (ex: github.com)')
+    parser.add_argument('-t', '--regx', action='store', dest='regx', required=True, help='Regular expression representing which Git repo tags to analyze (ex: prod)')
+    parser.add_argument('-c', '--api', action='store', dest='api', required=True, help='URL for AIP Console API (ex: http://server:8081/api)')
     parser.add_argument('-k', '--key', action='store', dest='key', required=True, help='API key for accessing Console')
+    parser.add_argument('-u', '--usr', action='store', dest='usr', required=False, help='Git repository user')
+    parser.add_argument('-p', '--pwd', action='store', dest='pwd', required=False, help='Git repository password')
+    
     parser.add_argument('-v','--version', action='version', version='%(prog)s 1.0')
     
     _args = parser.parse_args()
     _gApiUrl = _args.api
+    
+    # Check if optional username parameter is passed and adjust URL to include it
+    if _args.usr is not None:
+        # Inject username/password into Git repo URL
+        try:
+            _repoTokens = re.match(r"(https?://)(.*)", _args.repo)
+            _repoUrlCreds = _repoTokens.group(1) +  urllib.parse.quote(_args.usr) + ':' +  urllib.parse.quote(_args.pwd) + '@' + _repoTokens.group(2)
+        except TypeError:
+            print ('Invalid Git repository URL specified. Please correct.')
+            sys.exit(0)
+    else:
+        # Repo without credentials will be used
+        _repoUrlCreds = _args.repo
 
     try:
         # Initiate Console session
@@ -291,7 +308,7 @@ if __name__ == "__main__":
 
             print('Created temporary directory: ' + _tmpdirname)
             # Clone target repository locally
-            os.system('git clone ' + _args.repo + ' ' + _tmpdirname)
+            os.system('git clone ' + _repoUrlCreds + ' ' + _tmpdirname)
 
             # Get list of available tags
             ret = subprocess.check_output('cd /D ' + _tmpdirname + ' && git tag -l --format="%(creatordate:short)|%(refname:short)"', shell=True)
