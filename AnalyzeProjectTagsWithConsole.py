@@ -311,7 +311,7 @@ if __name__ == "__main__":
                     # Check if the tag has not yet been analyzed
                     if tagInfo[1] not in _gAppSnapshotsInfo:
                         print ('Setting code version to the target tag: {}'.format(tagInfo[1]))
-                        os.system('cd /D' + _tmpdirname + ' && git checkout tags/' + tagInfo[1] + ' -f')
+                        os.system('cd /D ' + _tmpdirname + ' && git checkout tags/' + tagInfo[1] + ' -f')
                         
                         with tempfile.TemporaryFile(prefix='Cast_Src_') as _tmpFile:
                             #tempfile.TemporaryFile(mode, buffering, encoding, newline, suffix, prefix, dir)
