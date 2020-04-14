@@ -319,10 +319,10 @@ if __name__ == "__main__":
 
             print('Checking out code to the following directory: ' + _srcdirname)
             # Clone target repository locally
-            os.system('git clone ' + _repoUrlCreds + ' ' + _srcdirname)
+            os.system('git clone ' + _repoUrlCreds + ' "' + _srcdirname + '"')
     
             # Get list of available tags
-            ret = subprocess.check_output('cd /D ' + _srcdirname + ' && git tag -l --format="%(creatordate:short)|%(refname:short)"', shell=True)
+            ret = subprocess.check_output('cd /D "' + _srcdirname + '" && git tag -l --format="%(creatordate:short)|%(refname:short)"', shell=True)
             # Covert byte sequence to an array
             tags = ret.decode('ascii').splitlines()
             
@@ -339,7 +339,7 @@ if __name__ == "__main__":
                     # Check if the tag has not yet been analyzed
                     if replaceSpecialChars(tagInfo[1]) not in _gAppSnapshotsInfo:
                         print ('Setting code version to the target tag: {}'.format(tagInfo[1]))
-                        os.system('cd /D ' + _srcdirname + ' && git checkout tags/' + tagInfo[1] + ' -f')
+                        os.system('cd /D "' + _srcdirname + '" && git checkout tags/' + tagInfo[1] + ' -f')
                         
                         with tempfile.TemporaryFile(prefix='CAST_Zip_', dir=os.getcwd()) as _zipFile:
                             # Create temporary zip file
