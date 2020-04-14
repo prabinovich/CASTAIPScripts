@@ -28,6 +28,7 @@ def getAppSnapshots(_consoleSession, _appName):
     
     _headers = {
         'Accept':'application/json',
+        'X-API-KEY':_gApiKey,
         'X-XSRF-TOKEN': _consoleSession.cookies['XSRF-TOKEN']
     }
 
@@ -79,6 +80,7 @@ def runAnalysis(_consoleSession, _appGuid, _versionName, _releaseDate, _sourceZi
     _headers = {
         'Accept':'application/json',
         'Content-Type': 'application/json',
+        'X-API-KEY':_gApiKey,
         'X-XSRF-TOKEN': _consoleSession.cookies['XSRF-TOKEN']
     }
     _data = """{
@@ -130,8 +132,8 @@ def pollAndWaitForJobFinished(_consoleSession, _jobGuid):
     
     _headers = {
         'Accept':'application/json',
-        'X-XSRF-TOKEN': _consoleSession.cookies['XSRF-TOKEN'],
-        'X-API-KEY':_gApiKey
+        'X-API-KEY':_gApiKey,
+        'X-XSRF-TOKEN': _consoleSession.cookies['XSRF-TOKEN']
     }
 
     _bJobSucceeded = False
@@ -168,7 +170,7 @@ def pollAndWaitForJobFinished(_consoleSession, _jobGuid):
         print('Aborting script...')
         sys.exit(0)
     
-    return (_jobGuid)
+    return (_bJobSucceeded)
 
 # Analyze an app
 def registerNewApp(_consoleSession, _appName):
@@ -178,8 +180,8 @@ def registerNewApp(_consoleSession, _appName):
     _headers = {
         'Accept':'application/json',
         'Content-Type': 'application/json',
-        'X-XSRF-TOKEN': _consoleSession.cookies['XSRF-TOKEN'],
-        'X-API-KEY':_gApiKey
+        'X-API-KEY':_gApiKey,
+        'X-XSRF-TOKEN': _consoleSession.cookies['XSRF-TOKEN']
     }
     _data = """{
         "jobParameters": {
