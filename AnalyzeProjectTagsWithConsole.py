@@ -345,8 +345,6 @@ if __name__ == "__main__":
                             shutil.make_archive(_tmpFilePath, 'zip', _tmpdirname)
                             print ('Initializing analysis for app: "{}" tag: "{}"'.format(_args.app, tagInfo[1]))
                             runAnalysis(_consoleSession, _appGuid, replaceSpecialChars(tagInfo[1]), tagInfo[0],  (_tmpFilePath+'.zip').replace('\\','\\\\'))
-                            # cleanup if needed
-                            os.system('del /f /q {}.zip'.format(_tmpFilePath))
                     else:
                         print ('Tag {} already analyzed... skipping'.format(tagInfo[1]))
                 else:
