@@ -17,6 +17,7 @@ requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 # Declare global variables
 _gAppSnapshotsInfo = {} # application snapshot info
 _gApiUrl = '' # console API URL
+_gApiKey = '' # console API Key
 
 # Will retrieve the list of snapshots for specified application
 # Will return True or False depending if mentioned application exists on AIP Console server
@@ -129,7 +130,8 @@ def pollAndWaitForJobFinished(_consoleSession, _jobGuid):
     
     _headers = {
         'Accept':'application/json',
-        'X-XSRF-TOKEN': _consoleSession.cookies['XSRF-TOKEN']
+        'X-XSRF-TOKEN': _consoleSession.cookies['XSRF-TOKEN'],
+        'X-API-KEY':_gApiKey
     }
 
     _bJobSucceeded = False
@@ -176,7 +178,8 @@ def registerNewApp(_consoleSession, _appName):
     _headers = {
         'Accept':'application/json',
         'Content-Type': 'application/json',
-        'X-XSRF-TOKEN': _consoleSession.cookies['XSRF-TOKEN']
+        'X-XSRF-TOKEN': _consoleSession.cookies['XSRF-TOKEN'],
+        'X-API-KEY':_gApiKey
     }
     _data = """{
         "jobParameters": {
@@ -227,14 +230,14 @@ def replaceSpecialChars(_inStr):
     return (_outStr)
 
 # Initialize session to console API
-def initConsoleSession(_apiKey):
+def initConsoleSession():
     # Define URI to get list of all applications 
     _restUri = ''
     
     _headers = {
         'Accept':'application/json',
         'Content-Type': 'application/json',
-        'X-API-KEY':_apiKey
+        'X-API-KEY':_gApiKey
     }
 
     try:
@@ -281,6 +284,7 @@ if __name__ == "__main__":
     
     _args = parser.parse_args()
     _gApiUrl = _args.api
+    _gApiKey = _args.key
     
     # Check if optional username parameter is passed and adjust URL to include it
     if _args.usr is not None:
@@ -297,7 +301,7 @@ if __name__ == "__main__":
 
     try:
         # Initiate Console session
-        _consoleSession = initConsoleSession(_args.key)
+        _consoleSession = initConsoleSession()
         
         # See if application has been analyzed already
         _appGuid = getAppSnapshots(_consoleSession, _args.app)
@@ -311,20 +315,20 @@ if __name__ == "__main__":
                 sys.exit(0)
         
         # Checkout code to a temp directory and scan each tag available
-        with tempfile.TemporaryDirectory(prefix='CAST_Src_') as _tmpdirname:
+        with tempfile.TemporaryDirectory(prefix='CAST_Src_', dir=os.getcwd()) as _srcdirname: 
 
-            print('Created temporary directory: ' + _tmpdirname)
+            print('Checking out code to the following directory: ' + _srcdirname)
             # Clone target repository locally
-            os.system('git clone ' + _repoUrlCreds + ' ' + _tmpdirname)
-
+            os.system('git clone ' + _repoUrlCreds + ' ' + _srcdirname)
+    
             # Get list of available tags
-            ret = subprocess.check_output('cd /D ' + _tmpdirname + ' && git tag -l --format="%(creatordate:short)|%(refname:short)"', shell=True)
+            ret = subprocess.check_output('cd /D ' + _srcdirname + ' && git tag -l --format="%(creatordate:short)|%(refname:short)"', shell=True)
             # Covert byte sequence to an array
             tags = ret.decode('ascii').splitlines()
             
             # Loop through tags and get code for each tag
             for tag in tags:
-
+    
                 # Create an array of date and tag
                 tagInfo = tag.split('|')
                 
@@ -335,21 +339,20 @@ if __name__ == "__main__":
                     # Check if the tag has not yet been analyzed
                     if replaceSpecialChars(tagInfo[1]) not in _gAppSnapshotsInfo:
                         print ('Setting code version to the target tag: {}'.format(tagInfo[1]))
-                        os.system('cd /D ' + _tmpdirname + ' && git checkout tags/' + tagInfo[1] + ' -f')
+                        os.system('cd /D ' + _srcdirname + ' && git checkout tags/' + tagInfo[1] + ' -f')
                         
-                        with tempfile.TemporaryFile(prefix='CAST_Zip_') as _tmpFile:
-                            #tempfile.TemporaryFile(mode, buffering, encoding, newline, suffix, prefix, dir)
+                        with tempfile.TemporaryFile(prefix='CAST_Zip_', dir=os.getcwd()) as _zipFile:
                             # Create temporary zip file
-                            _tmpFilePath = os.path.realpath(_tmpFile.name)
-                            print ('Creating temporary ZIP file: {}.zip'.format(_tmpFilePath))
-                            shutil.make_archive(_tmpFilePath, 'zip', _tmpdirname)
+                            _srczipname = os.path.realpath(_zipFile.name)
+                            print ('Creating temporary ZIP file: {}.zip'.format(_srczipname))
+                            shutil.make_archive(_srczipname, 'zip', _srcdirname)
                             print ('Initializing analysis for app: "{}" tag: "{}"'.format(_args.app, tagInfo[1]))
-                            runAnalysis(_consoleSession, _appGuid, replaceSpecialChars(tagInfo[1]), tagInfo[0],  (_tmpFilePath+'.zip').replace('\\','\\\\'))
+                            runAnalysis(_consoleSession, _appGuid, replaceSpecialChars(tagInfo[1]), tagInfo[0],  (_srczipname+'.zip').replace('\\','\\\\'))
                     else:
                         print ('Tag {} already analyzed... skipping'.format(tagInfo[1]))
                 else:
                     print ('Tag {} did not match targeted pattern... skipping'.format(tagInfo[1]))
-
+        
     except Exception as e:
             print('Error: {}'.format(str(e)))
 
