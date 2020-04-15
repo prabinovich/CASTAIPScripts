@@ -96,6 +96,12 @@ def runAnalysis(_consoleSession, _appGuid, _versionName, _releaseDate, _sourceZi
     _jobGuid = ''
     try:
         _result = _consoleSession.post(_gApiUrl+'/'+_restUri, headers=_headers, data=_data, verify=False, timeout=30)
+        # If error, try to reestablish the session
+        if _result.status_code != 201:
+            print ('Session expired while running analysis... reconnecting.')
+            _consoleSession = initConsoleSession()
+            _result = _consoleSession.post(_gApiUrl+'/'+_restUri, headers=_headers, data=_data, verify=False, timeout=30)
+        
         if _result.status_code == 201:
             _jobGuid = _result.json()['jobGuid']
             print ('Scan request succeeded. Job ID: {}'.format(_jobGuid))
@@ -142,12 +148,18 @@ def pollAndWaitForJobFinished(_consoleSession, _jobGuid):
         _jobState = 'starting'
         while _jobState == 'starting' or _jobState == 'started':
             _result = _consoleSession.get(_gApiUrl+'/'+_restUri+'/'+_jobGuid, headers=_headers, verify=False, timeout=30)
+            # If error, try to reestablish the session
+            if _result.status_code != 200:
+                print ('Session expired while polling... reconnecting.')
+                _consoleSession = initConsoleSession()
+                _result = _consoleSession.get(_gApiUrl+'/'+_restUri+'/'+_jobGuid, headers=_headers, verify=False, timeout=30)
+            
             if _result.status_code == 200:
                 _jobState = _result.json()['state']
                 # if job status is not completed sleep for 5 seconds
                 if _jobState == 'starting' or _jobState == 'started':
-                    print ('Job status: {}. Sleeping for 5 seconds'.format(_jobState))
-                    time.sleep(5)
+                    print ('Job status: {}. Sleeping for 30 seconds'.format(_jobState), flush=True)
+                    time.sleep(30)
                 else:
                     _jobState = _result.json()['state']
                     if _jobState == 'completed':
@@ -271,6 +283,12 @@ def initConsoleSession():
 
     return (_consoleSession)
 
+# Convert seconds into hour:minute:sec format
+def format_time(seconds): 
+    min, sec = divmod(seconds, 60) 
+    hour, min = divmod(min, 60) 
+    return "%dh %02dm %02ds" % (hour, min, sec)
+
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Will analyzes all tags for a given Git repo using AIP Console.")
@@ -349,7 +367,16 @@ if __name__ == "__main__":
                             print ('Creating temporary ZIP file: {}.zip'.format(_srczipname))
                             shutil.make_archive(_srczipname, 'zip', _srcdirname)
                             print ('Initializing analysis for app: "{}" tag: "{}"'.format(_args.app, tagInfo[1]))
-                            runAnalysis(_consoleSession, _appGuid, replaceSpecialChars(tagInfo[1]), tagInfo[0],  (_srczipname+'.zip').replace('\\','\\\\'))
+                            
+                            _startTime = time.time()
+                            print ('Analysis of {} starting at {}'.format(_args.app, time.ctime(_startTime)), flush=True)
+                            #runAnalysis(_consoleSession, _appGuid, replaceSpecialChars(tagInfo[1]), tagInfo[0],  (_srczipname+'.zip').replace('\\','\\\\'))
+                            _endTime = time.time()
+                            print('Analysis of {} completed at {}. Time elapsed {}.'.format(_args.app, time.ctime(_endTime), format_time(_endTime - _startTime)), flush=True)
+                            
+                            # Cleanup
+                            if os.path.exists(_srczipname + '.zip'):
+                                os.remove(_srczipname + '.zip')
                     else:
                         print ('Tag {} already analyzed... skipping'.format(tagInfo[1]))
                 else:
