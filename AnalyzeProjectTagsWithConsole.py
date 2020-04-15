@@ -370,7 +370,7 @@ if __name__ == "__main__":
                             
                             _startTime = time.time()
                             print ('Analysis of {} starting at {}'.format(_args.app, time.ctime(_startTime)), flush=True)
-                            #runAnalysis(_consoleSession, _appGuid, replaceSpecialChars(tagInfo[1]), tagInfo[0],  (_srczipname+'.zip').replace('\\','\\\\'))
+                            runAnalysis(_consoleSession, _appGuid, replaceSpecialChars(tagInfo[1]), tagInfo[0],  (_srczipname+'.zip').replace('\\','\\\\'))
                             _endTime = time.time()
                             print('Analysis of {} completed at {}. Time elapsed {}.'.format(_args.app, time.ctime(_endTime), format_time(_endTime - _startTime)), flush=True)
                             
