@@ -10,6 +10,7 @@ import json
 import subprocess
 import tempfile
 import shutil
+from shutil import copytree, ignore_patterns
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 from sys import prefix
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
@@ -90,7 +91,7 @@ def runAnalysis(_consoleSession, _appGuid, _versionName, _releaseDate, _sourceZi
             "releaseDate": \"""" + str.format("{}T00:00:00.000Z", _releaseDate) + """\",
             "sourceArchive": \"""" + _sourceZip + """\"
           },
-        "jobType": "ADD_VERSION"
+        "jobType": "add_version"
     }"""
 
     _jobGuid = ''
@@ -98,7 +99,7 @@ def runAnalysis(_consoleSession, _appGuid, _versionName, _releaseDate, _sourceZi
         _result = _consoleSession.post(_gApiUrl+'/'+_restUri, headers=_headers, data=_data, verify=False, timeout=30)
         # If error, try to reestablish the session
         if _result.status_code != 201:
-            print ('Session expired while running analysis... reconnecting.')
+            print ('Session invalid... reconnecting.')
             _consoleSession = initConsoleSession()
             _result = _consoleSession.post(_gApiUrl+'/'+_restUri, headers=_headers, data=_data, verify=False, timeout=30)
         
@@ -258,7 +259,7 @@ def initConsoleSession():
         _consoleSession = requests.session()
         _result = _consoleSession.get(_gApiUrl+'/'+_restUri, headers=_headers, verify=False, timeout=30)
         if _result.status_code == 200:
-            print ('Connection to AIP Console established successfully')
+            print ('Connection session to AIP Console established successfully')
         else:
             print ('Failed to establish AIP Console session. Error code {}'.format(_result.status_code))
             print ('Detailed response:')
@@ -335,14 +336,14 @@ if __name__ == "__main__":
                 sys.exit(0)
         
         # Checkout code to a temp directory and scan each tag available
-        with tempfile.TemporaryDirectory(prefix='CAST_Src_', dir=os.getcwd()) as _srcdirname: 
+        with tempfile.TemporaryDirectory(prefix='CAST_Git_', dir=os.getcwd()) as _gitdirname: 
 
-            print('Checking out code to the following directory: ' + _srcdirname)
+            print('Checking out code to the following directory: ' + _gitdirname)
             # Clone target repository locally
-            os.system('git clone ' + _repoUrlCreds + ' "' + _srcdirname + '"')
+            os.system('git clone ' + _repoUrlCreds + ' "' + _gitdirname + '"')
     
             # Get list of available tags
-            ret = subprocess.check_output('cd /D "' + _srcdirname + '" && git tag -l --format="%(creatordate:short)|%(refname:short)"', shell=True)
+            ret = subprocess.check_output('cd /D "' + _gitdirname + '" && git tag -l --format="%(creatordate:short)|%(refname:short)"', shell=True)
             # Covert byte sequence to an array
             tags = ret.decode('ascii').splitlines()
             
@@ -359,24 +360,28 @@ if __name__ == "__main__":
                     # Check if the tag has not yet been analyzed
                     if replaceSpecialChars(tagInfo[1]) not in _gAppSnapshotsInfo:
                         print ('Setting code version to the target tag: {}'.format(tagInfo[1]))
-                        os.system('cd /D "' + _srcdirname + '" && git checkout tags/' + tagInfo[1] + ' -f')
-                        
-                        with tempfile.TemporaryFile(prefix='CAST_Zip_', dir=os.getcwd()) as _zipFile:
-                            # Create temporary zip file
-                            _srczipname = os.path.realpath(_zipFile.name)
-                            print ('Creating temporary ZIP file: {}.zip'.format(_srczipname))
-                            shutil.make_archive(_srczipname, 'zip', _srcdirname)
-                            print ('Initializing analysis for app: "{}" tag: "{}"'.format(_args.app, tagInfo[1]))
-                            
-                            _startTime = time.time()
-                            print ('Analysis of {} starting at {}'.format(_args.app, time.ctime(_startTime)), flush=True)
-                            runAnalysis(_consoleSession, _appGuid, replaceSpecialChars(tagInfo[1]), tagInfo[0],  (_srczipname+'.zip').replace('\\','\\\\'))
-                            _endTime = time.time()
-                            print('Analysis of {} completed at {}. Time elapsed {}.'.format(_args.app, time.ctime(_endTime), format_time(_endTime - _startTime)), flush=True)
-                            
-                            # Cleanup
-                            if os.path.exists(_srczipname + '.zip'):
-                                os.remove(_srczipname + '.zip')
+                        os.system('cd /D "' + _gitdirname + '" && git checkout tags/' + tagInfo[1] + ' -f')
+                        with tempfile.TemporaryDirectory(prefix='CAST_SrcTmp_', dir=os.getcwd()) as _tmpsrcdirname:
+                            shutil.copytree(_gitdirname, _tmpsrcdirname + "\\1", ignore=ignore_patterns('.git'))
+                            with tempfile.TemporaryFile(prefix='CAST_SrcZip_', dir=os.getcwd()) as _zipFile:
+                                # Create temporary zip file
+                                _srczipname = os.path.realpath(_zipFile.name)
+                                print ('Creating temporary ZIP file: {}.zip'.format(_srczipname))
+                                shutil.make_archive(_srczipname, 'zip', _tmpsrcdirname + "\\1")
+                                print ('Initializing analysis for app: "{}" tag: "{}"'.format(_args.app, tagInfo[1]))
+                                
+                                _startTime = time.time()
+                                print ('Analysis of {} starting at {}'.format(_args.app, time.ctime(_startTime)), flush=True)
+                                
+                                # time.sleep(30) # Debug
+                                
+                                runAnalysis(_consoleSession, _appGuid, replaceSpecialChars(tagInfo[1]), tagInfo[0],  (_srczipname+'.zip').replace('\\','\\\\'))
+                                _endTime = time.time()
+                                print('Analysis of {} completed at {}. Time elapsed {}.'.format(_args.app, time.ctime(_endTime), format_time(_endTime - _startTime)), flush=True)
+                                
+                                # Cleanup
+                                if os.path.exists(_srczipname + '.zip'):
+                                    os.remove(_srczipname + '.zip')
                     else:
                         print ('Tag {} already analyzed... skipping'.format(tagInfo[1]))
                 else:
