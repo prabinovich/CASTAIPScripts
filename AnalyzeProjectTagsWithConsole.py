@@ -73,6 +73,84 @@ def getAppSnapshots(_consoleSession, _appName):
     
     return (_appGuid)
 
+def uploadFile(_consoleSession, _appGuid, _filepath):
+    
+    with open(_filepath, 'rb') as myFile:
+
+        # create upload
+        _filename = os.path.basename(myFile.name)
+        print("Creating new upload for app '{}' using file '{}'".format(_appGuid, _filename))
+
+        _createUpload = "{}/applications/{}/upload".format(_gApiUrl, _appGuid)
+        _filesize = os.stat(myFile.fileno()).st_size
+        
+        _headers = {
+        'X-API-KEY':_gApiKey,
+        'X-XSRF-TOKEN': _consoleSession.cookies['XSRF-TOKEN'],
+        }
+        _data = '''{{"fileName": "{}", "fileSize": {} }}'''.format(_filename, _filesize)
+        create_response = _consoleSession.post(_createUpload, data=_data, headers=_headers, timeout=30)
+        
+        if create_response.status_code != 201:
+            print("Unable to create upload. Status {} : {}".format(create_response.status_code, create_response.text))
+            return 1
+
+        upload_guid = create_response.json()['guid']
+        if upload_guid == "" or len(upload_guid) <= 0:
+            print ('Upload file creation failed (no uid was generated)')
+            return 2
+
+        chunk_idx = 1
+        part_upload_url = "{}/{}".format(_createUpload, upload_guid)
+        print("Upload created with uid {} for application {}".format(upload_guid, _appGuid))
+
+        content_part = myFile.read(MAX_SIZE)
+        last_status = 200
+        # Update XSRF token from the cookies
+        _headers = {
+            'X-API-KEY':_gApiKey,
+            'X-XSRF-TOKEN': _consoleSession.cookies['XSRF-TOKEN']
+        }
+
+        while content_part != b'':
+            contentSize = len(content_part)
+
+            uploadBody = '''{{ "chunkSize": "{}" }}'''.format(contentSize)
+
+            _files = [
+                ('metadata', ('metadata.json', uploadBody, 'application/json')),
+                ('content', ('content', content_part, 'application/octet-stream'))
+            ]
+
+            print('Body is : \n{}'.format(uploadBody))
+
+            upload_part = _consoleSession.patch(part_upload_url, files=_files, headers=_headers)
+
+            if upload_part.status_code not in [200, 201]:
+                print("Error while uploading part : {}".format(upload_part.text))
+                print("Occured while uploading chunk #{} (from offset {})".format(
+                    chunk_idx, myFile.tell()))
+                return 3
+            else:
+                last_status = upload_part.status_code
+
+            chunk_idx = chunk_idx + 1
+            content_part = myFile.read(MAX_SIZE)
+            # Update XSRF token from the cookies
+            _headers = {
+                'X-API-KEY':_gApiKey,
+                'X-XSRF-TOKEN': _consoleSession.cookies['XSRF-TOKEN']
+            }
+
+    if last_status != 201:
+        print('Upload not complete. Last return status was 200 instead of 201')
+        return 4
+
+    print('Uploaded file successfully in {} chunks of {}MB each'.format(
+        chunk_idx-1, MAX_SIZE/(1024*1024)))
+    print('Done')
+    return 0
+
 # Analyze an app
 def runAnalysis(_consoleSession, _appGuid, _versionName, _releaseDate, _sourceZip):
     # Define URI to get list of all applications 
@@ -374,8 +452,8 @@ if __name__ == "__main__":
                                 print ('Analysis of {} starting at {}'.format(_args.app, time.ctime(_startTime)), flush=True)
                                 
                                 # time.sleep(30) # Debug
-                                
-                                runAnalysis(_consoleSession, _appGuid, replaceSpecialChars(tagInfo[1]), tagInfo[0],  (_srczipname+'.zip').replace('\\','\\\\'))
+                                uploadFile(_consoleSession, _appGuid, (_srczipname+'.zip').replace('\\','\\\\'))
+                                #runAnalysis(_consoleSession, _appGuid, replaceSpecialChars(tagInfo[1]), tagInfo[0],  (_srczipname+'.zip').replace('\\','\/'))
                                 _endTime = time.time()
                                 print('Analysis of {} completed at {}. Time elapsed {}.'.format(_args.app, time.ctime(_endTime), format_time(_endTime - _startTime)), flush=True)
                                 
