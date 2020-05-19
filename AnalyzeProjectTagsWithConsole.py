@@ -175,15 +175,6 @@ def runAnalysis(_consoleSession, _appGuid, _versionName, _releaseDate, _sourceZi
         "jobType": "add_version"
     }"""
 
-    print ('************ DEBUG ******************')
-    print ('header:')
-    print (_headers)
-    print ('payload:')
-    print (_data)
-    print ('cookies:')
-    print (_consoleSession.cookies)
-    print ('************ /DEBUG ******************')
-
     _jobGuid = ''
     try:
         _result = _consoleSession.post(_gApiUrl+'/'+_restUri, headers=_headers, data=_data, verify=False, timeout=30)
