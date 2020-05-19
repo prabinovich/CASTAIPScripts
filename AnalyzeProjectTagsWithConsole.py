@@ -75,6 +75,8 @@ def getAppSnapshots(_consoleSession, _appName):
 
 def uploadFile(_consoleSession, _appGuid, _filepath):
     
+    MAX_SIZE = 25 * 1024 * 1024
+    
     with open(_filepath, 'rb') as myFile:
 
         # create upload
@@ -82,11 +84,13 @@ def uploadFile(_consoleSession, _appGuid, _filepath):
         print("Creating new upload for app '{}' using file '{}'".format(_appGuid, _filename))
 
         _createUpload = "{}/applications/{}/upload".format(_gApiUrl, _appGuid)
+        print(_createUpload)
         _filesize = os.stat(myFile.fileno()).st_size
         
         _headers = {
+        'content-type': 'application/json',
         'X-API-KEY':_gApiKey,
-        'X-XSRF-TOKEN': _consoleSession.cookies['XSRF-TOKEN'],
+        'X-XSRF-TOKEN': _consoleSession.cookies['XSRF-TOKEN']
         }
         _data = '''{{"fileName": "{}", "fileSize": {} }}'''.format(_filename, _filesize)
         create_response = _consoleSession.post(_createUpload, data=_data, headers=_headers, timeout=30)
@@ -126,10 +130,11 @@ def uploadFile(_consoleSession, _appGuid, _filepath):
 
             upload_part = _consoleSession.patch(part_upload_url, files=_files, headers=_headers)
 
-            if upload_part.status_code not in [200, 201]:
+            # Per Adrien:  201 status should be replaced with 202
+            # 200 is upload complete, 202 is partial upload complete (a chunk of the file is correctly uploaded)
+            if upload_part.status_code not in [200, 202]:
                 print("Error while uploading part : {}".format(upload_part.text))
-                print("Occured while uploading chunk #{} (from offset {})".format(
-                    chunk_idx, myFile.tell()))
+                print("Occured while uploading chunk #{} (from offset {})".format(chunk_idx, myFile.tell()))
                 return 3
             else:
                 last_status = upload_part.status_code
@@ -142,20 +147,18 @@ def uploadFile(_consoleSession, _appGuid, _filepath):
                 'X-XSRF-TOKEN': _consoleSession.cookies['XSRF-TOKEN']
             }
 
-    if last_status != 201:
-        print('Upload not complete. Last return status was 200 instead of 201')
+    if last_status != 200:
+        print('Upload not complete. Last return status was {} instead of 200'.format(last_status))
         return 4
 
-    print('Uploaded file successfully in {} chunks of {}MB each'.format(
-        chunk_idx-1, MAX_SIZE/(1024*1024)))
+    print('Uploaded file successfully in {} chunks of {}MB each'.format(chunk_idx-1, MAX_SIZE/(1024*1024)))
     print('Done')
     return 0
 
 # Analyze an app
 def runAnalysis(_consoleSession, _appGuid, _versionName, _releaseDate, _sourceZip):
-    # Define URI to get list of all applications 
+    print ("Starting application analysis")
     _restUri = 'jobs'
-    
     _headers = {
         'Accept':'application/json',
         'Content-Type': 'application/json',
@@ -167,10 +170,19 @@ def runAnalysis(_consoleSession, _appGuid, _versionName, _releaseDate, _sourceZi
             "appGuid": \"""" + _appGuid + """\",
             "versionName": \"""" + _versionName + """\",
             "releaseDate": \"""" + str.format("{}T00:00:00.000Z", _releaseDate) + """\",
-            "sourceArchive": \"""" + _sourceZip + """\"
+            "sourcePath": \"upload:""" + _sourceZip + """\"
           },
         "jobType": "add_version"
     }"""
+
+    print ('************ DEBUG ******************')
+    print ('header:')
+    print (_headers)
+    print ('payload:')
+    print (_data)
+    print ('cookies:')
+    print (_consoleSession.cookies)
+    print ('************ /DEBUG ******************')
 
     _jobGuid = ''
     try:
@@ -441,25 +453,28 @@ if __name__ == "__main__":
                         os.system('cd /D "' + _gitdirname + '" && git checkout tags/' + tagInfo[1] + ' -f')
                         with tempfile.TemporaryDirectory(prefix='CAST_SrcTmp_', dir=os.getcwd()) as _tmpsrcdirname:
                             shutil.copytree(_gitdirname, _tmpsrcdirname + "\\1", ignore=ignore_patterns('.git'))
+                            # Create temporary zip file
                             with tempfile.TemporaryFile(prefix='CAST_SrcZip_', dir=os.getcwd()) as _zipFile:
-                                # Create temporary zip file
-                                _srczipname = os.path.realpath(_zipFile.name)
-                                print ('Creating temporary ZIP file: {}.zip'.format(_srczipname))
-                                shutil.make_archive(_srczipname, 'zip', _tmpsrcdirname + "\\1")
+                                # Get temp file name and path
+                                _srczippath = os.path.realpath(_zipFile.name)
+                                _srczipname = os.path.basename(_zipFile.name)
+                                print ('Creating temporary ZIP file: {}.zip'.format(_srczippath))
+                                shutil.make_archive(_srczippath, 'zip', _tmpsrcdirname + "\\1")
                                 print ('Initializing analysis for app: "{}" tag: "{}"'.format(_args.app, tagInfo[1]))
                                 
                                 _startTime = time.time()
                                 print ('Analysis of {} starting at {}'.format(_args.app, time.ctime(_startTime)), flush=True)
                                 
-                                # time.sleep(30) # Debug
-                                uploadFile(_consoleSession, _appGuid, (_srczipname+'.zip').replace('\\','\\\\'))
-                                #runAnalysis(_consoleSession, _appGuid, replaceSpecialChars(tagInfo[1]), tagInfo[0],  (_srczipname+'.zip').replace('\\','\/'))
+                                # Upload file from client to server
+                                uploadFile(_consoleSession, _appGuid, (_srczippath+'.zip').replace('\\','\\\\'))
+                                # Run application analysis
+                                runAnalysis(_consoleSession, _appGuid, replaceSpecialChars(tagInfo[1]), tagInfo[0], '{}/{}.zip'.format(_args.app, _srczipname))
                                 _endTime = time.time()
                                 print('Analysis of {} completed at {}. Time elapsed {}.'.format(_args.app, time.ctime(_endTime), format_time(_endTime - _startTime)), flush=True)
                                 
                                 # Cleanup
-                                if os.path.exists(_srczipname + '.zip'):
-                                    os.remove(_srczipname + '.zip')
+                                if os.path.exists(_srczippath + '.zip'):
+                                    os.remove(_srczippath + '.zip')
                     else:
                         print ('Tag {} already analyzed... skipping'.format(tagInfo[1]))
                 else:
