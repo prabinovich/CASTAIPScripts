@@ -424,7 +424,7 @@ if __name__ == "__main__":
             os.system('git clone ' + _repoUrlCreds + ' "' + _gitdirname + '"')
     
             # Get list of available tags
-            ret = subprocess.check_output('cd /D "' + _gitdirname + '" && git tag -l --format="%(creatordate:short)|%(refname:short)"', shell=True)
+            ret = subprocess.check_output('cd "' + _gitdirname + '" && git tag -l --format="%(creatordate:short)|%(refname:short)"', shell=True)
             # Covert byte sequence to an array
             tags = ret.decode('ascii').splitlines()
             
@@ -441,11 +441,11 @@ if __name__ == "__main__":
                     # Check if the tag has not yet been analyzed
                     if replaceSpecialChars(tagInfo[1]) not in _gAppSnapshotsInfo:
                         print ('Setting code version to the target tag: {}'.format(tagInfo[1]))
-                        os.system('cd /D "' + _gitdirname + '" && git checkout tags/' + tagInfo[1] + ' -f')
+                        os.system('cd "' + _gitdirname + '" && git checkout tags/' + tagInfo[1] + ' -f')
                         with tempfile.TemporaryDirectory(prefix='CAST_SrcTmp_', dir=os.getcwd()) as _tmpsrcdirname:
                             shutil.copytree(_gitdirname, _tmpsrcdirname + "\\1", ignore=ignore_patterns('.git'))
                             # Create temporary zip file
-                            with tempfile.TemporaryFile(prefix='CAST_SrcZip_', dir=os.getcwd()) as _zipFile:
+                            with tempfile.NamedTemporaryFile(prefix='CAST_SrcZip_', dir=os.getcwd()) as _zipFile:
                                 # Get temp file name and path
                                 _srczippath = os.path.realpath(_zipFile.name)
                                 _srczipname = os.path.basename(_zipFile.name)
