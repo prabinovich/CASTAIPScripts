@@ -442,6 +442,7 @@ if __name__ == "__main__":
             # Covert byte sequence to an array
             tags = ret.decode('ascii').splitlines()
             
+            # Check the total number of tags found in Git repository
             if len(tags) != 0:
                 print ('Found {} tags in repo. Looking through them to find tags targeted for scans'.format(len(tags)))
             else:
@@ -467,22 +468,28 @@ if __name__ == "__main__":
                             if _err != 0:
                                 print ('Error checking out repo tag "{}"... aborting.'.format(tagInfo[1]))
                                 sys.exit(_err)
-                                
-                        # If supplementary folder has been provided, add it to the temporary git folder to be included in delivery
-                        if _args.dir is not None:
-                            print ('Copying supplementary directory "{}"to include in code delivery'.format(_args.dir))
-                            shutil.copytree(_args.dir, _gitReposRoot + '/' + os.path.basename(_args.dir))
                         
                         with tempfile.TemporaryDirectory(prefix='CAST_SrcTmp_', dir=os.getcwd()) as _tmpsrcdirname:
-                            shutil.copytree(_gitReposRoot, _tmpsrcdirname + "\\1", ignore=ignore_patterns('.git'))
+                            # Copy Git directory tree into another temp directory while removing .git folders
+                            shutil.copytree(_gitReposRoot, _tmpsrcdirname + "/1", ignore=ignore_patterns('.git'))
+                            
+                            # If supplementary folder has been provided, add it to the temporary folder to be included in delivery
+                            if _args.dir is not None:
+                                print ('Copying supplementary directory "{}"to include in code delivery'.format(_args.dir))
+                                shutil.copytree(_args.dir, _tmpsrcdirname + '/1/' + os.path.basename(_args.dir))
+                            
                             # Create temporary zip file
                             with tempfile.NamedTemporaryFile(prefix='CAST_SrcZip_', dir=os.getcwd()) as _zipFile:
                                 # Get temp file name and path
                                 _srczippath = os.path.realpath(_zipFile.name)
                                 _srczipname = os.path.basename(_zipFile.name)
                                 print ('Creating temporary ZIP file: {}.zip'.format(_srczippath))
-                                shutil.make_archive(_srczippath, 'zip', _tmpsrcdirname + "\\1")
+                                shutil.make_archive(_srczippath, 'zip', _tmpsrcdirname + "/1")
                                 print ('Initializing analysis for app: "{}" tag: "{}"'.format(_args.app, tagInfo[1]))
+                                
+                                print ('debug ... exiting')
+                                time.sleep(300)
+                                sys.exit(0)
                                 
                                 _startTime = time.time()
                                 print ('Analysis of {} starting at {}'.format(_args.app, time.ctime(_startTime)), flush=True)
