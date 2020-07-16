@@ -374,15 +374,17 @@ def format_time(seconds):
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Will analyzes all tags for a given Git repo using AIP Console.")
-    parser.add_argument('-a', '--app', action='store', dest='app', required=True, help='Name of the application to scan (ex: foo)')
-    parser.add_argument('-r', '--repo', action='store', dest='repo', required=True, help='Git repo location for downloading source (ex: github.com)')
-    parser.add_argument('-t', '--regx', action='store', dest='regx', required=True, help='Regular expression representing which Git repo tags to analyze (ex: prod)')
-    parser.add_argument('-c', '--api', action='store', dest='api', required=True, help='URL for AIP Console API (ex: http://server:8081/api)')
-    parser.add_argument('-k', '--key', action='store', dest='key', required=True, help='API key for accessing Console')
-    parser.add_argument('-u', '--usr', action='store', dest='usr', required=False, help='Git repository user')
-    parser.add_argument('-p', '--pwd', action='store', dest='pwd', required=False, help='Git repository password')
+    parser.add_argument('--app', action='store', dest='app', required=True, help='Name of the application to scan (ex: foo)')
+    parser.add_argument('--gitUrl', action='store', dest='gitUrl', required=True, help='Git repo URL for downloading source. Include project name (ex: https://github.com/prabinovich)')
+    parser.add_argument('--repos', action='store', dest='repos', required=True, help='Git repo name(s) that will downloaded for analysis separated by commas')
+    parser.add_argument('--dir', action='store', dest='dir', required=False, help='Local or network folder to include in analysis')
+    parser.add_argument('--regx', action='store', dest='regx', required=True, help='Regular expression representing which Git repo tags to analyze (ex: prod)')
+    parser.add_argument('--api', action='store', dest='api', required=True, help='URL for AIP Console API (ex: http://server:8081/api)')
+    parser.add_argument('--key', action='store', dest='key', required=True, help='API key for accessing Console')
+    parser.add_argument('--usr', action='store', dest='usr', required=False, help='Git repository user')
+    parser.add_argument('--pwd', action='store', dest='pwd', required=False, help='Git repository password')
     
-    parser.add_argument('-v','--version', action='version', version='%(prog)s 1.0')
+    parser.add_argument('-v','--version', action='version', version='%(prog)s 2.0')
     
     _args = parser.parse_args()
     _gApiUrl = _args.api
@@ -392,14 +394,24 @@ if __name__ == "__main__":
     if _args.usr is not None:
         # Inject username/password into Git repo URL
         try:
-            _repoTokens = re.match(r"(https?://)(.*)", _args.repo)
+            _repoTokens = re.match(r"(https?://)(.*)", _args.gitUrl)
             _repoUrlCreds = _repoTokens.group(1) +  urllib.parse.quote(_args.usr) + ':' +  urllib.parse.quote(_args.pwd) + '@' + _repoTokens.group(2)
         except TypeError:
             print ('Invalid Git repository URL specified. Please correct.')
             sys.exit(0)
     else:
         # Repo without credentials will be used
-        _repoUrlCreds = _args.repo
+        _repoUrlCreds = _args.gitUrl
+        
+    # Get list of repos to include in analysis
+    _gitRepos = _args.repos.split(',')
+
+    # Check if folder parameter was passed and verify that the directory is valid
+    if _args.dir is not None:
+        if not os.path.isdir(_args.dir):
+            print ('Directory specified in --dir parameter is invalid: ' + _args.dir)
+            print ('Please correct')
+            sys.exit(0)
 
     try:
         # Initiate Console session
@@ -417,16 +429,23 @@ if __name__ == "__main__":
                 sys.exit(0)
         
         # Checkout code to a temp directory and scan each tag available
-        with tempfile.TemporaryDirectory(prefix='CAST_Git_', dir=os.getcwd()) as _gitdirname: 
+        with tempfile.TemporaryDirectory(prefix='CAST_Git_', dir=os.getcwd()) as _gitReposRoot: 
 
-            print('Checking out code to the following directory: ' + _gitdirname)
-            # Clone target repository locally
-            os.system('git clone ' + _repoUrlCreds + ' "' + _gitdirname + '"')
-    
+            print('Checking out code to the following directory: ' + _gitReposRoot)
+            # Clone each target repository locally
+            for _gitRepoName in _gitRepos:
+                print ('Cloning repository: {}/{}.git'.format(_args.gitUrl, _gitRepoName))
+                os.system('git clone {}/{}.git "{}/{}"'.format(_repoUrlCreds, _gitRepoName, _gitReposRoot, _gitRepoName))
+            
             # Get list of available tags
-            ret = subprocess.check_output('cd "' + _gitdirname + '" && git tag -l --format="%(creatordate:short)|%(refname:short)"', shell=True)
+            ret = subprocess.check_output('cd "' + _gitReposRoot + "/" + _gitRepos[0] + '" && git tag -l --format="%(creatordate:short)|%(refname:short)"', shell=True)
             # Covert byte sequence to an array
             tags = ret.decode('ascii').splitlines()
+            
+            if len(tags) != 0:
+                print ('Found {} tags in repo. Looking through them to find tags targeted for scans'.format(len(tags)))
+            else:
+                print ('Repo does not contain any tags... aborting')
             
             # Loop through tags and get code for each tag
             for tag in tags:
@@ -441,9 +460,21 @@ if __name__ == "__main__":
                     # Check if the tag has not yet been analyzed
                     if replaceSpecialChars(tagInfo[1]) not in _gAppSnapshotsInfo:
                         print ('Setting code version to the target tag: {}'.format(tagInfo[1]))
-                        os.system('cd "' + _gitdirname + '" && git checkout tags/' + tagInfo[1] + ' -f')
+                        # Get the version of the code based on current tag
+                        for _gitRepoName in _gitRepos:
+                            print ('Setting repo {} version to current tag {}'.format(_gitRepoName, tagInfo[1]))
+                            _err = os.system('cd "' + _gitReposRoot + '/' + _gitRepoName + '" && git checkout tags/' + tagInfo[1] + ' -f')
+                            if _err != 0:
+                                print ('Error checking out repo tag "{}"... aborting.'.format(tagInfo[1]))
+                                sys.exit(_err)
+                                
+                        # If supplementary folder has been provided, add it to the temporary git folder to be included in delivery
+                        if _args.dir is not None:
+                            print ('Copying supplementary directory "{}"to include in code delivery'.format(_args.dir))
+                            shutil.copytree(_args.dir, _gitReposRoot + '/' + os.path.basename(_args.dir))
+                        
                         with tempfile.TemporaryDirectory(prefix='CAST_SrcTmp_', dir=os.getcwd()) as _tmpsrcdirname:
-                            shutil.copytree(_gitdirname, _tmpsrcdirname + "\\1", ignore=ignore_patterns('.git'))
+                            shutil.copytree(_gitReposRoot, _tmpsrcdirname + "\\1", ignore=ignore_patterns('.git'))
                             # Create temporary zip file
                             with tempfile.NamedTemporaryFile(prefix='CAST_SrcZip_', dir=os.getcwd()) as _zipFile:
                                 # Get temp file name and path
