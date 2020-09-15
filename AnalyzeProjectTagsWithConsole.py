@@ -20,9 +20,8 @@ _gAppSnapshotsInfo = {} # application snapshot info
 _gApiUrl = '' # console API URL
 _gApiKey = '' # console API Key
 
-# Will retrieve the list of snapshots for specified application
-# Will return True or False depending if mentioned application exists on AIP Console server
-def getAppSnapshots(_consoleSession, _appName):
+# Will retrieve application GUID based on the application name
+def getAppGuid(_consoleSession, _appName):
     
     # Define URI to get list of all applications 
     _restUri = 'applications'
@@ -60,11 +59,6 @@ def getAppSnapshots(_consoleSession, _appName):
                 if _app['name'] == _appName:
                     _appGuid = _app['guid']
                     print ('Detected application "{}"... Bingo!'.format(_app['name']))
-                    print ('This is our target application. Saving snapshot info.')
-                    # If this is our app, save info about its snapshots
-                    for _snapshot in _app['versions']:
-                        print ('Saving information for snapshot "{}"'.format(_snapshot['name']))
-                        _gAppSnapshotsInfo[_snapshot['name']] = _snapshot
                 else:
                     print ('Detected application "{}"... skipping.'.format(_app['name']))
     else:
@@ -72,6 +66,52 @@ def getAppSnapshots(_consoleSession, _appName):
         print ('Json: {}'.format(str(_jsonResult)))
     
     return (_appGuid)
+
+# Will retrieve application GUID based on the application name
+def getAppSnapshots(_consoleSession, _appName, _appGuid):
+    
+    # Define URI to get list of versions for an application 
+    _restUri = 'applications/{}/snapshots'.format(_appGuid)
+    
+    _headers = {
+        'Accept':'application/json',
+        'X-API-KEY':_gApiKey,
+        'X-XSRF-TOKEN': _consoleSession.cookies['XSRF-TOKEN']
+    }
+
+    try:
+        #_jsonResult = requests.get(_apiUrl+'/'+_restUri, headers=_headers, verify=False, timeout=30).json()
+        print ('Getting versions for application GUID {}'.format(_appGuid))
+        _jsonResult = _consoleSession.get(_gApiUrl+'/'+_restUri, verify=False, timeout=30).json()
+    except requests.exceptions.RequestException as e:
+        try:
+            print('1st connection attempt to RestAPI failed. Trying again...')
+            _jsonResult = requests.get(_gApiUrl+'/'+_restUri, headers=_headers, verify=False, timeout=60).json()
+            print('2nd call succeeded.')
+        except requests.exceptions.RequestException as e:
+            print('Failed to connect to RestAPI')
+            print('Error: {}'.format(e))
+            print('Aborting script...')
+            sys.exit(0)
+
+    # extract version information from returned JSON
+    # if error, print JSON and error message
+    try:
+        _snapCount = 0
+        for _snapshot in _jsonResult:
+            print ('Found "{}" snapshot in application "{}"'.format(_snapshot['versionName'], _snapshot['application']['name']))
+            _gAppSnapshotsInfo[_snapshot['versionName']] = _snapshot
+            _snapCount += 1
+        
+        print ('Found total of {} snapshots in the application "{}"'.format(_snapCount, _appName))
+    
+    except Exception as e:
+        print ('Failed to get analyzed versions. Error: {}'.format(e))
+        print ('Json: {}'.format(str(_jsonResult)))
+        print ('Aborting script...')
+        sys.exit(0)
+    
+    return _snapCount
 
 def uploadFile(_consoleSession, _appGuid, _filepath):
     
@@ -418,9 +458,11 @@ if __name__ == "__main__":
         _consoleSession = initConsoleSession()
         
         # See if application has been analyzed already
-        _appGuid = getAppSnapshots(_consoleSession, _args.app)
+        _appGuid = getAppGuid(_consoleSession, _args.app)
         if _appGuid != '':
             print ('Application found... analyze any new versions')
+            # Get snapshots that have already been analyzed
+            getAppSnapshots(_consoleSession, _args.app, _appGuid)
         else:
             print ('New application... registering new app')
             _appGuid = registerNewApp(_consoleSession, _args.app)
@@ -486,10 +528,6 @@ if __name__ == "__main__":
                                 print ('Creating temporary ZIP file: {}.zip'.format(_srczippath))
                                 shutil.make_archive(_srczippath, 'zip', _tmpsrcdirname + "/1")
                                 print ('Initializing analysis for app: "{}" tag: "{}"'.format(_args.app, tagInfo[1]))
-                                
-                                print ('debug ... exiting')
-                                time.sleep(300)
-                                sys.exit(0)
                                 
                                 _startTime = time.time()
                                 print ('Analysis of {} starting at {}'.format(_args.app, time.ctime(_startTime)), flush=True)
