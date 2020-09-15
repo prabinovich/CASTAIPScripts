@@ -81,7 +81,7 @@ def getAppSnapshots(_consoleSession, _appName, _appGuid):
 
     try:
         #_jsonResult = requests.get(_apiUrl+'/'+_restUri, headers=_headers, verify=False, timeout=30).json()
-        print ('Getting versions for application GUID {}'.format(_appGuid))
+        print ('Getting versions for application "{}"'.format(_appName))
         _jsonResult = _consoleSession.get(_gApiUrl+'/'+_restUri, verify=False, timeout=30).json()
     except requests.exceptions.RequestException as e:
         try:
