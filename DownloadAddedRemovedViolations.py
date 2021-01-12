@@ -83,6 +83,7 @@ def getSnapshotResults(_apiUrl, _auth, _appName, _snapshotResultsUri, _aipResult
             # Loop through all rules and write results to file
             for item in _jsonResult[0]['applicationResults']:                
                 # Check if JSON element is present, otherwise specify that data is unavailable
+                _ruleType = item['type']
                 _ruleName = item['reference']['name'] if ('reference' in item and 'name' in item['reference']) else 'n/a'
                 _ruleHref = item['reference']['href'] if ('reference' in item and 'href' in item['reference']) else 'n/a'
                 _ruleID = item['reference']['key'] if ('reference' in item and 'key' in item['reference']) else 'n/a'
@@ -103,11 +104,16 @@ def getSnapshotResults(_apiUrl, _auth, _appName, _snapshotResultsUri, _aipResult
                 # Get health factors that rule is contributing to
                 _ruleHealthFactors = getRuleHFs(_apiUrl, _auth, _ruleID, _ruleName, _ruleHref)
                 
-                # Header: 'app_name,snapshot_name,snapshot_date,rule,critical_flag,grade,addedCriticalViolations,
-                #    removedCriticalViolations,addedViolations,removedViolations,health_factors
-                _aipResultsFile.write('"{}","{}","{}","{}","{}",{},{},{},{},{},"{}"\n'.format(_appName, _snapshotName, _snapshotDate, _ruleName, 
-                    _ruleCriticalFlag, _ruleGrade, _addedCriticalViolations, _removedCriticalViolations, _addedViolations, 
-                    _removedViolations, _ruleHealthFactors))
+                # Write the info only if there is a change in the rule
+                if ((_addedCriticalViolations == 0 and _removedCriticalViolations == 0
+                    and _addedViolations == 0 and _removedViolations == 0) or (_ruleType != 'quality-rules')):
+                    pass # Skip if no changes to violations
+                else:
+                    # Header: 'app_name,snapshot_name,snapshot_date,rule,critical_flag,grade,addedCriticalViolations,
+                    #    removedCriticalViolations,addedViolations,removedViolations,health_factors
+                    _aipResultsFile.write('"{}","{}","{}","{}","{}",{},{},{},{},{},"{}"\n'.format(_appName, _snapshotName, _snapshotDate, _ruleName, 
+                        _ruleCriticalFlag, _ruleGrade, _addedCriticalViolations, _removedCriticalViolations, _addedViolations, 
+                        _removedViolations, _ruleHealthFactors))
 
     except Exception as e:
         print('***********************************************')
