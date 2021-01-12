@@ -34,7 +34,10 @@ def getAppSnapshots(_apiUrl, _auth, _appName, _appResultsUri, _aipResultsFile):
         
         # Check to see if there are any snapshots
         if len(_jsonResult) == 0:
-            _aipResultsFile.write('{},"{}","{}","{}","{}","{}"\n'.format(_appid, _appname, 'no snapshots', 'no snapshots', 'no snapshots', 'no snapshots', 'no snapshots'))
+            # Header: 'app_name,snapshot_name,snapshot_date,rule,critical_flag,grade,addedCriticalViolations,
+                #    removedCriticalViolations,addedViolations,removedViolations,health_factors
+            _aipResultsFile.write('"{}",{},{},{},{},{},{},{},{},{},{}\n'.format(_appname, 'no snapshots', 'no snapshots', 'no snapshots', 'no snapshots', 
+                'no snapshots', 'no snapshots', 'no snapshots', 'no snapshots', 'no snapshots', 'no snapshots'))
         else:
             # Loop through each snapshot and get rule results
             for item in _jsonResult:
@@ -73,8 +76,10 @@ def getSnapshotResults(_apiUrl, _auth, _appName, _snapshotResultsUri, _aipResult
         if len(_jsonResult[0]['applicationResults']) == 0:
             _aipResultsFile.write('{},"{}","{}","{}","{}","{}"\n'.format(_appid, _appname, 'no metrics', 'no metrics', 'no metrics', 'no metrics', 'no metrics'))
         else:
-            # Get snapshot version
+            # Get snapshot version info
             _snapshotName = _jsonResult[0]['version']
+            _snapshotDate = _jsonResult[0]['date']['isoDate']
+            
             # Loop through all rules and write results to file
             for item in _jsonResult[0]['applicationResults']:                
                 # Check if JSON element is present, otherwise specify that data is unavailable
@@ -98,9 +103,9 @@ def getSnapshotResults(_apiUrl, _auth, _appName, _snapshotResultsUri, _aipResult
                 # Get health factors that rule is contributing to
                 _ruleHealthFactors = getRuleHFs(_apiUrl, _auth, _ruleID, _ruleName, _ruleHref)
                 
-                # Header: app_name,snapshot,rule,critical_flag,grade,addedCriticalViolations,removedCriticalViolations
-                #         addedViolations, removedViolations, health_factors
-                _aipResultsFile.write('"{}","{}","{}","{}",{},{},{},{},{},"{}"\n'.format(_appName, _snapshotName, _ruleName, 
+                # Header: 'app_name,snapshot_name,snapshot_date,rule,critical_flag,grade,addedCriticalViolations,
+                #    removedCriticalViolations,addedViolations,removedViolations,health_factors
+                _aipResultsFile.write('"{}","{}","{}","{}","{}",{},{},{},{},{},"{}"\n'.format(_appName, _snapshotName, _snapshotDate, _ruleName, 
                     _ruleCriticalFlag, _ruleGrade, _addedCriticalViolations, _removedCriticalViolations, _addedViolations, 
                     _removedViolations, _ruleHealthFactors))
 
@@ -175,7 +180,7 @@ if __name__ == "__main__":
         # Create file where results of query will be stored
         _aipresultsfile = open(_args.filepath, "w")
         # Write file header
-        _aipresultsfile.write('app_name,snapshot,rule,critical_flag,grade,addedCriticalViolations,removedCriticalViolations,addedViolations,removedViolations,health_factors\n')
+        _aipresultsfile.write('app_name,snapshot_name,snapshot_date,rule,critical_flag,grade,addedCriticalViolations,removedCriticalViolations,addedViolations,removedViolations,health_factors\n')
 
         # Get list of all applications
         _headers = {'Accept':'application/json'}
