@@ -8,8 +8,9 @@ import json
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
-# Declare and initialize map for keeping Health Factors contributing to each rule 
+# Declare and initialize map for keeping Health Factors and Quality Standards contributing to each rule 
 _gRuleHFDict = {}
+_gRuleQualStdDict = {}
 
 def getAppSnapshots(_apiUrl, _auth, _appName, _appResultsUri, _aipResultsFile):
     _headers = {'Accept':'application/json'}
@@ -36,8 +37,8 @@ def getAppSnapshots(_apiUrl, _auth, _appName, _appResultsUri, _aipResultsFile):
         if len(_jsonResult) == 0:
             # Header: 'app_name,snapshot_name,snapshot_date,rule,critical_flag,grade,addedCriticalViolations,
                 #    removedCriticalViolations,addedViolations,removedViolations,health_factors
-            _aipResultsFile.write('"{}",{},{},{},{},{},{},{},{},{},{}\n'.format(_appname, 'no snapshots', 'no snapshots', 'no snapshots', 'no snapshots', 
-                'no snapshots', 'no snapshots', 'no snapshots', 'no snapshots', 'no snapshots', 'no snapshots'))
+            _aipResultsFile.write('"{}",{},{},{},{},{},{},{},{},{},{},{}\n'.format(_appname, 'no snapshots', 'no snapshots', 'no snapshots', 'no snapshots', 
+                'no snapshots', 'no snapshots', 'no snapshots', 'no snapshots', 'no snapshots', 'no snapshots', 'no snapshots'))
         else:
             # Loop through each snapshot and get rule results
             for item in _jsonResult:
@@ -74,7 +75,8 @@ def getSnapshotResults(_apiUrl, _auth, _appName, _snapshotResultsUri, _aipResult
         
         # Check to see if there are any metrics for this snapshot
         if len(_jsonResult[0]['applicationResults']) == 0:
-            _aipResultsFile.write('{},"{}","{}","{}","{}","{}"\n'.format(_appid, _appname, 'no metrics', 'no metrics', 'no metrics', 'no metrics', 'no metrics'))
+            _aipResultsFile.write('"{}",{},{},{},{},{},{},{},{},{},{},{}\n'.format(_appname, 'no metrics', 'no metrics', 'no metrics', 'no metrics', 
+                    'no metrics', 'no metrics', 'no metrics', 'no metrics', 'no metrics', 'no metrics', 'no metrics'))
         else:
             # Get snapshot version info
             _snapshotName = _jsonResult[0]['version']
@@ -102,7 +104,7 @@ def getSnapshotResults(_apiUrl, _auth, _appName, _snapshotResultsUri, _aipResult
                     _removedViolations = 'n/a'
                 
                 # Get health factors that rule is contributing to
-                _ruleHealthFactors = getRuleHFs(_apiUrl, _auth, _ruleID, _ruleName, _ruleHref)
+                _ruleHealthFactors, _ruleQualityStandards = getRuleHFs(_apiUrl, _auth, _ruleID, _ruleName, _ruleHref)
                 
                 # Write the info only if there is a change in the rule
                 if ((_addedCriticalViolations == 0 and _removedCriticalViolations == 0
@@ -110,10 +112,10 @@ def getSnapshotResults(_apiUrl, _auth, _appName, _snapshotResultsUri, _aipResult
                     pass # Skip if no changes to violations
                 else:
                     # Header: 'app_name,snapshot_name,snapshot_date,rule,critical_flag,grade,addedCriticalViolations,
-                    #    removedCriticalViolations,addedViolations,removedViolations,health_factors
-                    _aipResultsFile.write('"{}","{}","{}","{}","{}",{},{},{},{},{},"{}"\n'.format(_appName, _snapshotName, _snapshotDate, _ruleName, 
+                    #    removedCriticalViolations,addedViolations,removedViolations,health_factors,quality_standards
+                    _aipResultsFile.write('"{}","{}","{}","{}","{}",{},{},{},{},{},"{}","{}"\n'.format(_appName, _snapshotName, _snapshotDate, _ruleName, 
                         _ruleCriticalFlag, _ruleGrade, _addedCriticalViolations, _removedCriticalViolations, _addedViolations, 
-                        _removedViolations, _ruleHealthFactors))
+                        _removedViolations, _ruleHealthFactors, _ruleQualityStandards))
 
     except Exception as e:
         print('***********************************************')
@@ -129,9 +131,11 @@ def getRuleHFs(_apiUrl, _auth, _ruleID, _ruleName, _ruleInfoUri):
     
     try:
         # Check if the contributing info available in dictionary
-        if (_ruleID in _gRuleHFDict):
+        if (_ruleID in _gRuleHFDict) and (_ruleID in _gRuleQualStdDict):
             # Pull HF from dictionary
             _ruleHealthFactors = _gRuleHFDict[_ruleID]
+            _ruleQualityStandards = _gRuleQualStdDict[_ruleID]
+            
         else:
             try:
                 #print('Making a call to get rule info')
@@ -147,7 +151,7 @@ def getRuleHFs(_apiUrl, _auth, _ruleID, _ruleName, _ruleInfoUri):
                     print('Error: {}'.format(e))
                     print('Aborting script...')
                     sys.exit(0)
-            
+                    
             # Check to see if information is available
             _ruleHealthFactors = ''
             if len(_jsonResult['gradeAggregators']) == 0:
@@ -163,12 +167,69 @@ def getRuleHFs(_apiUrl, _auth, _ruleID, _ruleName, _ruleInfoUri):
                 # Add HF info for new rule
                 _gRuleHFDict[_ruleID] = _ruleHealthFactors
 
+            # See if rule pattern is available
+            _ruleQualityStandards = ''
+            if 'rulePattern' not in _jsonResult:
+                _ruleQualityStandards = 'none'
+            else:
+                # Make the call to pull that information
+                _rulePatternURI = _jsonResult['rulePattern']['href']
+                _ruleQualityStandards = getRuleQualityStandards(_apiUrl, _auth, _ruleID, _ruleName, _rulePatternURI)
+
     except Exception as e:
         print('***********************************************')
         print('Error: {}'.format(str(e)))
         print('***********************************************')
     
-    return (_ruleHealthFactors)
+    return (_ruleHealthFactors, _ruleQualityStandards)
+
+def getRuleQualityStandards(_apiUrl, _auth, _ruleID, _ruleName, _rulePatternURI):
+    _headers = {'Accept':'application/json'}
+    # Get the list of all snapshots
+    _restUri = '{}'.format(_rulePatternURI)
+    
+    try:
+        # Check if info available in dictionary
+        if (_ruleID in _gRuleQualStdDict):
+            # Pull from dictionary
+            _ruleQualityStandards = _gRuleQualStdDict[_ruleID]
+        else:
+            try:
+                # print('Making a call to get rule quality standards info')
+                _jsonResult = requests.get(_apiUrl+'/'+_restUri, headers=_headers, auth=_auth, verify=False, timeout=30).json()
+                # print('1st RestAPI quality standards call succeeded.')
+            except requests.exceptions.RequestException as e:
+                try:
+                    print('1st connection attempt to RestAPI failed. Trying again...')
+                    _jsonResult = requests.get(_apiUrl+'/'+_restUri, headers=_headers, auth=_auth, verify=False, timeout=60).json()
+                    print('2nd call succeeded.')
+                except requests.exceptions.RequestException as e:
+                    print('Failed to connect to RestAPI')
+                    print('Error: {}'.format(e))
+                    print('Aborting script...')
+                    sys.exit(0)
+            
+            # Check to see if information is available
+            _ruleQualityStandards = ''
+            if len(_jsonResult['qualityStandards']) == 0:
+                _ruleQualityStandards = 'none'
+            else:
+                # Loop through and collect contributing health factors
+                for item in _jsonResult['qualityStandards']:
+                    if _ruleQualityStandards == '':
+                        _ruleQualityStandards = '{}({})'.format(item['id'], item['standard'])
+                    else:
+                        _ruleQualityStandards = _ruleQualityStandards + ',' + '{}({})'.format(item['id'], item['standard'])
+                
+                # Add HF info for new rule
+                _gRuleQualStdDict[_ruleID] = _ruleQualityStandards
+
+    except Exception as e:
+        print('***********************************************')
+        print('Error: {}'.format(str(e)))
+        print('***********************************************')
+    
+    return (_ruleQualityStandards)
 
 if __name__ == "__main__":
     
@@ -186,7 +247,8 @@ if __name__ == "__main__":
         # Create file where results of query will be stored
         _aipresultsfile = open(_args.filepath, "w")
         # Write file header
-        _aipresultsfile.write('app_name,snapshot_name,snapshot_date,rule,critical_flag,grade,addedCriticalViolations,removedCriticalViolations,addedViolations,removedViolations,health_factors\n')
+        _aipresultsfile.write('app_name,snapshot_name,snapshot_date,rule,critical_flag,grade,addedCriticalViolations,' +
+            'removedCriticalViolations,addedViolations,removedViolations,health_factors,quality_standards\n')
 
         # Get list of all applications
         _headers = {'Accept':'application/json'}
