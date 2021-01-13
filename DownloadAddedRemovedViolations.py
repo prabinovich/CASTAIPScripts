@@ -132,13 +132,14 @@ def getRuleHFs(_apiUrl, _auth, _ruleID, _ruleName, _ruleInfoUri):
     try:
         # Check if the contributing info available in dictionary
         if (_ruleID in _gRuleHFDict) and (_ruleID in _gRuleQualStdDict):
+            print('Pull rule info from dictionary')
             # Pull HF from dictionary
             _ruleHealthFactors = _gRuleHFDict[_ruleID]
             _ruleQualityStandards = _gRuleQualStdDict[_ruleID]
             
         else:
             try:
-                #print('Making a call to get rule info')
+                print('Making a call to get rule info')
                 _jsonResult = requests.get(_apiUrl+'/'+_restUri, headers=_headers, auth=_auth, verify=False, timeout=30).json()
                 #print('1st RestAPI call succeeded.')
             except requests.exceptions.RequestException as e:
@@ -164,8 +165,8 @@ def getRuleHFs(_apiUrl, _auth, _ruleID, _ruleName, _ruleInfoUri):
                     else:
                          _ruleHealthFactors = _ruleHealthFactors + ',' + item['name']
                 
-                # Add HF info for new rule
-                _gRuleHFDict[_ruleID] = _ruleHealthFactors
+            # Add HF info for new rule
+            _gRuleHFDict[_ruleID] = _ruleHealthFactors
 
             # See if rule pattern is available
             _ruleQualityStandards = ''
@@ -175,6 +176,9 @@ def getRuleHFs(_apiUrl, _auth, _ruleID, _ruleName, _ruleInfoUri):
                 # Make the call to pull that information
                 _rulePatternURI = _jsonResult['rulePattern']['href']
                 _ruleQualityStandards = getRuleQualityStandards(_apiUrl, _auth, _ruleID, _ruleName, _rulePatternURI)
+
+            # Add HF info for new rule
+            _gRuleQualStdDict[_ruleID] = _ruleQualityStandards
 
     except Exception as e:
         print('***********************************************')
@@ -220,9 +224,6 @@ def getRuleQualityStandards(_apiUrl, _auth, _ruleID, _ruleName, _rulePatternURI)
                         _ruleQualityStandards = '{}({})'.format(item['id'], item['standard'])
                     else:
                         _ruleQualityStandards = _ruleQualityStandards + ',' + '{}({})'.format(item['id'], item['standard'])
-                
-                # Add HF info for new rule
-                _gRuleQualStdDict[_ruleID] = _ruleQualityStandards
 
     except Exception as e:
         print('***********************************************')
