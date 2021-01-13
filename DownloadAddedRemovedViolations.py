@@ -132,14 +132,14 @@ def getRuleHFs(_apiUrl, _auth, _ruleID, _ruleName, _ruleInfoUri):
     try:
         # Check if the contributing info available in dictionary
         if (_ruleID in _gRuleHFDict) and (_ruleID in _gRuleQualStdDict):
-            print('Pull rule info from dictionary')
+            # print('Pull rule info from dictionary')
             # Pull HF from dictionary
             _ruleHealthFactors = _gRuleHFDict[_ruleID]
             _ruleQualityStandards = _gRuleQualStdDict[_ruleID]
             
         else:
             try:
-                print('Making a call to get rule info')
+                # print('Making a call to get rule info')
                 _jsonResult = requests.get(_apiUrl+'/'+_restUri, headers=_headers, auth=_auth, verify=False, timeout=30).json()
                 #print('1st RestAPI call succeeded.')
             except requests.exceptions.RequestException as e:
